@@ -1,0 +1,118 @@
+---
+title: "JavaScript enters: enhancement vs takeover"
+description: The dividing line isn't how much JavaScript you write — it's who owns the DOM. Cross from enhancing to owning deliberately, because you can't easily cross back.
+track: rendering
+order: 2
+duration: 12 min
+---
+
+import SprinkleVsWidget from '../../../components/demos/SprinkleVsWidget.astro';
+
+Last lesson ended at the document's wall: the only unit of update is the whole page. JavaScript is how we broke through that wall, and the industry has spent twenty-five years arguing about how big the hole should be.
+
+The argument is usually framed as a quantity question — "how much JS is too much?" — and quantity framings produce bad decisions, because nobody can say what the right number is. Here is the framing that actually predicts how your codebase will behave:
+
+**Who owns the DOM — the document, or your JavaScript?**
+
+There are only two answers, and they create two different worlds.
+
+## World one: the document owns, JavaScript enhances
+
+In this world, the HTML is a complete, working interface. JavaScript's job is to *upgrade* it in place: catch the form submission and handle it without a reload, validate as the user types, swap a fragment instead of the page. If the JavaScript never arrives — slow network, browser extension, a bug in the bundle, a CDN having a bad day — the feature degrades to its HTML form and **still works**.
+
+This is *progressive enhancement*, a term with an unfortunate reputation for being something people say in conference talks and ignore at work. Strip the piety away and it's just an engineering property: **the feature's correctness doesn't depend on the enhancement layer**.
+
+```html
+<!-- The feature, complete: -->
+<form method="post" action="/subscribe">
+  <label for="email">Get the newsletter</label>
+  <input id="email" type="email" name="email" required />
+  <button>Subscribe</button>
+</form>
+
+<script type="module">
+  // The upgrade: same feature, no reload.
+  const form = document.querySelector('form');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await fetch('/subscribe', { method: 'POST', body: new FormData(form) });
+    form.replaceChildren(Object.assign(document.createElement('p'), {
+      textContent: '✓ Subscribed.',
+    }));
+  });
+</script>
+```
+
+Twenty lines. Note the shape: the script *intercepts* a working behavior and substitutes a nicer one. Delete the script and you've lost polish, not function.
+
+## World two: JavaScript owns, the document is a launch pad
+
+In this world the server ships an empty husk — `<div id="root"></div>` and a script tag — and JavaScript constructs the entire interface. The same newsletter feature:
+
+```jsx
+function Subscribe() {
+  const [email, setEmail] = useState('');
+  const [done, setDone] = useState(false);
+
+  if (done) return <p>✓ Subscribed.</p>;
+  return (
+    <form onSubmit={async (e) => {
+      e.preventDefault();
+      await fetch('/subscribe', { method: 'POST', body: new FormData(e.target) });
+      setDone(true);
+    }}>
+      <label htmlFor="email">Get the newsletter</label>
+      <input id="email" type="email" name="email" required
+             value={email} onChange={(e) => setEmail(e.target.value)} />
+      <button>Subscribe</button>
+    </form>
+  );
+}
+```
+
+Functionally identical when everything goes right. Architecturally opposite: if this script doesn't arrive and execute, there is no form. There is no *anything*.
+
+Feel the difference instead of taking my word for it — the switch simulates the JavaScript failing to load:
+
+<SprinkleVsWidget />
+
+## "But JavaScript always loads"
+
+The standard objection, so let's take it seriously. No, it doesn't always load — flaky mobile networks, corporate proxies, aggressive ad blockers, that one npm dependency that broke your bundle for one in every two hundred sessions and never showed up in your own testing. But honestly? **Most of the time, it loads.** If total failure were the only cost, the takeover world would be a reasonable bet for almost everything.
+
+The real argument is about what each world makes *cheap* versus *expensive*:
+
+- In the enhancement world, the cheap thing is **resilience and reach** — working HTML for every user, crawler, and preview bot — and the expensive thing is **rich statefulness**. Wiring up many interacting sprinkles by hand gets genuinely miserable; nobody wants to coordinate fourteen event listeners with the DOM as their only shared memory.
+- In the takeover world, the cheap thing is **rich statefulness** — a component model, shared state, every interaction a function call away — and the expensive things are everything the document was doing for free: first paint, SEO, the back button, focus management, "open link in new tab". Each becomes *your* job, badly approximated by default. (The full bill is itemized next lesson.)
+
+Neither world is wrong. They're priced differently, and the mistake is buying the wrong price list for your product.
+
+## The ownership test
+
+The practical question for any given feature: **does this feature's state have a natural home in the document?**
+
+- The state of "is this section expanded" lives happily in a `<details>` element. Enhancement world.
+- The state of "what has the user typed" lives in the input. Validate it with a sprinkle. Enhancement world.
+- The state of "the seventy-two layers of this design file, three of them mid-drag" has no document representation at all. The DOM cannot be the source of truth because the truth isn't document-shaped. **That's the legitimate border crossing into takeover world.**
+
+The test generalizes: when JavaScript holds state that the DOM can't represent — when the DOM becomes a *projection* of your data rather than the data itself — you've crossed over. Sometimes you must. An editor, a map, a game, a spreadsheet: their truth is an in-memory model, and pretending otherwise produces worse code, not purer code.
+
+The failure mode is crossing *by accident*. Nobody decides "our marketing site's FAQ accordion should depend on 200 KB of JavaScript executing correctly". They decide "we use React for everything", and the accordion inherits the architecture along with its failure modes and its bill. The widget world is a fine place to live and a terrible default.
+
+<div class="aside">
+
+**The modern middle.** This dichotomy used to demand a whole-site answer. Islands architectures (Astro, Eleventy + WebC), HTMX, and React Server Components are all attempts to set the boundary *per component* instead: a mostly-owned-by-the-document page with declared zones of JavaScript ownership. We'll come back to this in lesson four — it's where the rendering pendulum is actually settling.
+
+</div>
+
+## How to apply this on Monday
+
+You probably can't choose your architecture — it was chosen years ago, and it's probably takeover-flavored. The ownership lens still pays rent:
+
+1. **Inside a React app, prefer document-owned state where it exists.** A `<details>` for disclosure. A real `<form>` with `action` (React 19 makes this idiomatic again). The URL for "which tab is open" — `?tab=billing` survives refresh and is shareable; `useState` is neither.
+2. **Let the browser keep its jobs.** Native validation attributes *plus* your custom messages. Real `<a href>` for navigation, even when a router intercepts it — middle-click should still work.
+3. **When you add a feature, ask the ownership question before the implementation question.** "Where does this state naturally live?" is a better first question than "which hook do I need?"
+
+---
+
+**The takeaway:** enhancement and takeover aren't points on a JavaScript-quantity dial; they're two ownership models with opposite price lists. The document should own everything it *can* represent; JavaScript should own what it *can't* — and the crossing should be a decision, not a default. Next lesson: what happens when an entire industry crossed by default — the single-page app, what it genuinely bought us, and the itemized bill.

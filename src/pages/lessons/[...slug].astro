@@ -1,0 +1,101 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getTrack } from '../../data/tracks';
+
+export async function getStaticPaths() {
+  const lessons = await getCollection('lessons', ({ data }) => !data.draft);
+  return lessons.map((lesson) => ({
+    params: { slug: lesson.id },
+    props: { lesson },
+  }));
+}
+
+const { lesson } = Astro.props;
+const { Content } = await render(lesson);
+const track = getTrack(lesson.data.track);
+
+const siblings = (
+  await getCollection('lessons', ({ data }) => data.track === lesson.data.track && !data.draft)
+).sort((a, b) => a.data.order - b.data.order);
+const index = siblings.findIndex((l) => l.id === lesson.id);
+const prev = siblings[index - 1];
+const next = siblings[index + 1];
+---
+
+<BaseLayout title={`${lesson.data.title} · Front in the End`} description={lesson.data.description}>
+  <article data-pagefind-body>
+    <header>
+      <p class="lesson-eyebrow">
+        <a href={`/tracks/${track.id}/`}>{track.title}</a>
+        <span>· lesson {lesson.data.order} of {siblings.length}</span>
+      </p>
+      <div class="lesson-number" aria-hidden="true">{String(lesson.data.order).padStart(2, '0')}</div>
+      <h1 class="lesson-title">{lesson.data.title}</h1>
+      <p class="lesson-desc">{lesson.data.description}</p>
+      <div class="lesson-meta">
+        <span>{lesson.data.duration} read</span>
+        <read-toggle data-id={lesson.id}>
+          <button class="read-toggle">mark as read</button>
+        </read-toggle>
+      </div>
+    </header>
+
+    <div class="prose">
+      <Content />
+    </div>
+
+    <nav class="lesson-pager">
+      {
+        prev ? (
+          <a href={`/lessons/${prev.id}/`}>
+            <span class="dir">← previous</span>
+            {prev.data.title}
+          </a>
+        ) : (
+          <a href={`/tracks/${track.id}/`}>
+            <span class="dir">← track</span>
+            {track.title}
+          </a>
+        )
+      }
+      {
+        next ? (
+          <a href={`/lessons/${next.id}/`} style="text-align: right">
+            <span class="dir">next →</span>
+            {next.data.title}
+          </a>
+        ) : (
+          <a href="/" style="text-align: right">
+            <span class="dir">end of track →</span>
+            Back to all tracks
+          </a>
+        )
+      }
+    </nav>
+  </article>
+</BaseLayout>
+
+<script>
+  import { isRead, setRead } from '../../lib/progress';
+
+  class ReadToggle extends HTMLElement {
+    connectedCallback() {
+      const id = this.dataset.id;
+      const button = this.querySelector('button');
+      if (!id || !button) return;
+      const paint = () => {
+        const read = isRead(id);
+        button.dataset.read = String(read);
+        button.textContent = read ? '✓ read' : 'mark as read';
+      };
+      button.addEventListener('click', () => {
+        setRead(id, !isRead(id));
+        paint();
+      });
+      paint();
+    }
+  }
+
+  customElements.define('read-toggle', ReadToggle);
+</script>

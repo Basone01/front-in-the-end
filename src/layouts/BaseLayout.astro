@@ -1,0 +1,70 @@
+---
+import '@fontsource-variable/literata';
+import '@fontsource-variable/literata/wght-italic.css';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate" type="application/rss+xml" title="Front in the End" href="/rss.xml" />
+    <script is:inline>
+      // Runs before paint to avoid a theme flash. System preference is the
+      // default; an explicit choice in localStorage wins.
+      (() => {
+        const saved = localStorage.getItem('fite:theme');
+        const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : system;
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="wordmark" href="/">front <em>in the</em> end</a>
+        <nav class="site-nav">
+          <a href="/#tracks">Tracks</a>
+          <a href="/about/">About</a>
+          <a href="/search/">Search</a>
+          <button class="theme-toggle" data-theme-toggle aria-label="Toggle color theme">
+            ◐ theme
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Front in the End — lessons in thinking like a frontend engineer.</span>
+        <a href="/about/">Colophon</a>
+        <a href="/rss.xml">RSS</a>
+      </div>
+    </footer>
+
+    <script>
+      const toggle = document.querySelector('[data-theme-toggle]');
+      toggle?.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem('fite:theme', next);
+      });
+    </script>
+  </body>
+</html>

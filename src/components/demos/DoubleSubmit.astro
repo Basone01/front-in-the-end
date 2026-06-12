@@ -1,0 +1,202 @@
+---
+// Async lesson 5 exhibit: the impatient user vs the checkout button. The
+// naive server creates an order per request; the fixes make duplicates
+// impossible at two different layers.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the impatient user"
+  reset
+  caption="“Disable while pending” fixes the button; the idempotency key fixes the world — retries, double-taps, and flaky networks all collapse into one order, because the server can recognize a repeat when it sees one."
+>
+  <div id="dsb-root">
+    <div class="controls">
+      <label>
+        defense
+        <select id="dsb-defense">
+          <option value="none">none (naive)</option>
+          <option value="disable">disable while pending</option>
+          <option value="idem">idempotency key</option>
+        </select>
+      </label>
+      <button id="dsb-impatient" type="button">😤 impatient user (3 fast clicks)</button>
+    </div>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome">checkout</div>
+        <div class="pane-screen center">
+          <button class="buy" id="dsb-buy" type="button">Place order — $49</button>
+          <p class="status" id="dsb-status"></p>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">the server's orders table</div>
+        <div class="pane-screen">
+          <ul class="orders" id="dsb-orders"></ul>
+          <p class="charged">customer charged: <strong id="dsb-charged">$0</strong></p>
+        </div>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .controls {
+    display: flex;
+    gap: 1.1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+    font-size: 0.85rem;
+  }
+
+  .controls select {
+    font: inherit;
+    font-size: 0.82rem;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+    margin-left: 0.4rem;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .buy:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+
+  .status {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    margin: 0;
+    min-height: 1.2em;
+  }
+
+  .orders {
+    list-style: none;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    min-height: 4.5em;
+  }
+
+  .orders :global(li) {
+    padding-block: 0.1rem;
+  }
+
+  .orders :global(li.dup) {
+    color: #c33;
+  }
+
+  .orders :global(li.dedup) {
+    color: var(--ink-faint);
+  }
+
+  .charged {
+    font-size: 0.85rem;
+    margin: 0;
+    border-top: 1px dashed var(--line);
+    padding-top: 0.4rem;
+  }
+</style>
+
+<script>
+  import { fakeFetch, wait } from '../../lib/fake-network';
+
+  const root = document.getElementById('dsb-root');
+  if (root) {
+    const defense = document.getElementById('dsb-defense') as HTMLSelectElement;
+    const buyBtn = document.getElementById('dsb-buy') as HTMLButtonElement;
+    const impatient = document.getElementById('dsb-impatient') as HTMLButtonElement;
+    const status = document.getElementById('dsb-status') as HTMLElement;
+    const ordersEl = document.getElementById('dsb-orders') as HTMLElement;
+    const chargedEl = document.getElementById('dsb-charged') as HTMLElement;
+
+    let orderSeq = 1000;
+    let charged = 0;
+    const seenKeys = new Set<string>();
+    let pending = 0;
+    let cartKey = 'cart-7f3a'; // one key per checkout attempt, not per click
+
+    function serverReceives(key?: string) {
+      // The server-side half of the story.
+      if (key && seenKeys.has(key)) {
+        const item = document.createElement('li');
+        item.className = 'dedup';
+        item.textContent = `↩ key ${key} already processed — returning existing order`;
+        ordersEl.append(item);
+        return;
+      }
+      if (key) seenKeys.add(key);
+      orderSeq += 1;
+      charged += 49;
+      const item = document.createElement('li');
+      const isDup = charged > 49;
+      item.className = isDup && !key ? 'dup' : '';
+      item.textContent = `order #${orderSeq} — $49${isDup && !key ? '  ← duplicate!' : ''}`;
+      ordersEl.append(item);
+      chargedEl.textContent = `$${charged}`;
+    }
+
+    async function placeOrder() {
+      if (defense.value === 'disable' && pending > 0) return;
+      pending += 1;
+      if (defense.value === 'disable') buyBtn.disabled = true;
+      status.textContent = 'processing…';
+
+      const key = defense.value === 'idem' ? cartKey : undefined;
+      await fakeFetch(900, { jitter: 500 });
+      serverReceives(key);
+
+      pending -= 1;
+      if (pending === 0) {
+        status.textContent = '✓ order placed';
+        buyBtn.disabled = false;
+        cartKey = `cart-${Math.random().toString(16).slice(2, 6)}`; // next checkout, next key
+        seenKeys.clear();
+      }
+    }
+
+    buyBtn.onclick = () => void placeOrder();
+
+    impatient.onclick = async () => {
+      impatient.disabled = true;
+      for (let i = 0; i < 3; i++) {
+        void placeOrder();
+        await wait(180);
+      }
+      impatient.disabled = false;
+    };
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      orderSeq = 1000;
+      charged = 0;
+      pending = 0;
+      seenKeys.clear();
+      ordersEl.innerHTML = '';
+      chargedEl.textContent = '$0';
+      status.textContent = '';
+      buyBtn.disabled = false;
+    });
+  }
+</script>

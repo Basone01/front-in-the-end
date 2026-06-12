@@ -1,0 +1,101 @@
+---
+title: "Cancellation & debounce: stop paying for stale work"
+description: The race guard protects your UI but still pays for every request. Debounce stops doomed work before it starts; abort stops it mid-flight. Most real inputs want both.
+track: async
+order: 3
+duration: 11 min
+---
+
+import WastedWork from '../../../components/demos/WastedWork.astro';
+
+Last lesson's guard fixed the lie on screen — stale responses get dropped instead of applied. But walk through what still happens when someone types `bangkok`: seven requests depart, seven queries run on your server, seven responses cross the network… and six are thrown in the bin on arrival. The UI is correct now. The *bill* is untouched: you paid full price for work whose only purpose was to be discarded.
+
+The claim: **discarding stale work is the floor, not the fix.** The fix is not creating doomed work in the first place — and the two tools for that operate at different moments. **Debounce** declines to start work that's about to be obsolete. **Abort** stops work that became obsolete after starting. They sound similar, get conflated constantly, and compose beautifully precisely because they're different.
+
+## Watch the meters, not the UI
+
+Same fast typist, three strategies. This time the result list doesn't matter — watch what each strategy costs:
+
+<WastedWork />
+
+Fire-everything: seven fired, six wasted — and remember from last lesson that the wasted ones are the *expensive* ones, short prefixes scanning half the table. Debounce: typically one or two fired, because the timer only survives the typist's final pause. Debounce-plus-abort: whatever debounce still let through gets reclaimed the moment it's superseded — the server (if it cooperates; more below) stops mid-query instead of completing an answer for the bin.
+
+## Debounce: the work you never start
+
+Debounce is a bet about intent: *a keystroke mid-burst isn't a question; the pause at the end is.* Implementation is a timer that each new event resets — the action fires only when events stop arriving for the chosen window:
+
+```js
+let timer;
+input.addEventListener('input', () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => search(input.value), 300);
+});
+```
+
+The window is a product decision wearing a number. Too short (≤100ms) and you're barely debouncing; too long (≥600ms) and search feels deaf. 250–400ms sits in the pocket for typing. And note what debounce is *for*: events that arrive in bursts where **only the final state matters**. Its sibling **throttle** ("at most once per interval") is for the other case — scroll positions, drag coordinates, autosave — where you want a *steady sample* of a continuous stream, not just its ending. Choosing debounce for autosave is how drafts get lost; choosing throttle for search is how servers get seven queries anyway. Match the tool to which moments matter.
+
+## Abort: the work you un-start
+
+Debounce can't help once the request is in flight — the typist paused, the bet was placed, and *then* they typed one more letter. `AbortController` is the browser's mechanism for revoking work already underway:
+
+```js
+let controller;
+
+async function search(query) {
+  controller?.abort();                  // revoke the previous question
+  controller = new AbortController();
+  try {
+    const res = await fetch(`/search?q=${query}`, { signal: controller.signal });
+    render(await res.json());
+  } catch (err) {
+    if (err.name === 'AbortError') return;   // not a failure — a retraction
+    showError(err);                          // real failures still matter (lesson 1!)
+  }
+}
+```
+
+Three things earn their place in that snippet. **The abort-then-replace pattern at the top** doubles as a race guard — there can never be two in-flight searches, so out-of-order arrival is impossible; abort subsumes last lesson's integer for take-latest cases. **The `AbortError` filter** matters because an aborted fetch *rejects*, and an unfiltered catch will paint "Something went wrong" every time the user types quickly — an error state triggered by your own cleanup. **And the catch still exists**, because abort doesn't repeal lesson one: real network failures still need their state.
+
+One honesty note: client-side abort tears down the connection, and that's real savings (bandwidth, parsing, your event loop) — but whether the *server* stops mid-query depends on the server noticing the disconnect and caring. Many stacks don't. Abort is always a UI improvement and a client savings; treating it as guaranteed server savings is optimism. (It's still worth it.)
+
+## The composition, and where cleanup lives in React
+
+The full idiom for a live-search input — debounce the burst, abort the survivor — in React clothing:
+
+```jsx
+useEffect(() => {
+  if (!query) return;
+  const controller = new AbortController();
+  const timer = setTimeout(async () => {
+    try {
+      const res = await fetch(`/search?q=${query}`, { signal: controller.signal });
+      setResults(await res.json());
+    } catch (err) {
+      if (err.name !== 'AbortError') setError(err);
+    }
+  }, 300);
+
+  return () => {           // ← the load-bearing four lines
+    clearTimeout(timer);
+    controller.abort();
+  };
+}, [query]);
+```
+
+That cleanup function is doing three jobs at once: it's the debounce reset (clear the timer), the abort trigger (cancel in-flight work), and — because cleanup also runs on unmount — the fix for the *other* classic bug this lesson quietly covers: the component that gets torn down mid-fetch and then tries to `setState` from the grave. Stale timers, stale requests, and unmounted writes are all the same disease — **work outliving the question that prompted it** — and the cleanup function is where all three cures live.
+
+<div class="aside">
+
+**The library position, one more time.** TanStack Query passes an abort signal to your query function and cancels superseded keys; routers like Remix/React Router abort loaders on navigation away. The ecosystem keeps converging on the same conclusion this track keeps reaching: lifetimes of async work should be *managed by the thing that owns the question* — the query key, the route, the effect — not left to finish out of inertia. Your hand-rolled code should hold itself to the standard the libraries set.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Find your highest-frequency trigger** — search input, filter panel, autosave, resize handler — and check it for both layers: is the burst shaped (debounce/throttle)? Is the in-flight work revocable (signal)?
+2. **Check every effect-based fetch for a cleanup function.** No cleanup means three latent bugs in one: races, wasted work, and set-state-after-unmount warnings that everyone's learned to ignore.
+3. **Watch the network tab while you use your own search.** Count requests per query typed. The number is usually a small shock, and it's also your before/after metric for this whole lesson.
+
+---
+
+**The takeaway:** the race guard protects the screen; debounce and abort protect the budget — decline doomed work before it starts, revoke it when it's superseded, and put all the cleanup where the question's owner lives. So far the track has been defensive: handling, guarding, cancelling. Next lesson goes on offense — lying to the user, kindly and on purpose, with optimistic updates.

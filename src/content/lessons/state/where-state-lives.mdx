@@ -1,0 +1,75 @@
+---
+title: Where state lives
+description: "Component state is the default, and the default is a choice. The placement ladder: as close as possible, as durable as required — and the URL is criminally underused."
+track: state
+order: 3
+duration: 11 min
+---
+
+import StateHomes from '../../../components/demos/StateHomes.astro';
+
+One fact, one home — that was lesson two. This lesson is the estate agent's question: *which* home? Because the places a fact can live are not interchangeable, and each placement silently answers questions you may not have realized were being asked: Does this survive a refresh? Can the user share it? Does it follow them to another device? Who's allowed to change it?
+
+The claim: **`useState` is not a decision — it's the absence of one.** It's where state lands when nobody asked the placement question. Sometimes that's right; often it's a fact that wanted to live in the URL, or the server, quietly trapped in a component that will take it to the grave on the next refresh.
+
+## The ladder
+
+The homes, ordered roughly by lifetime and reach:
+
+1. **The DOM itself.** An input's text, a `<details>`'s openness, scroll position, focus. Lifetime: the element's. The browser manages it; you read it when needed. Underrated, as the rendering track argued.
+2. **Component state.** `useState` and friends. Lifetime: the component's — unmount it, navigate, or refresh, and it's gone. Reach: this component (and children, via props).
+3. **Shared client state** — lifted parents, context, stores. Same lifetime as component state (it's all one JS heap), wider reach: the whole running app.
+4. **The URL.** Lifetime: beyond the app — it survives refresh, lives in bookmarks and history, and *travels between people*. Reach: anyone with the link.
+5. **Browser storage** (`localStorage`, IndexedDB). Lifetime: the device. Survives refresh and even the tab; doesn't follow the user to their phone.
+6. **The server.** Lifetime: as long as your database. Reach: every device, every session — and every consequence: a network hop and a cache to manage (next lesson's entire subject).
+
+Two principles pick the rung. **As close as possible:** prefer the lowest rung that works — closeness means less plumbing, less coupling, automatic cleanup. **As durable as required:** but if the fact should outlive a refresh, a session, or a device, no amount of clean component code will save it from the wrong rung. Lifetime requirements beat convenience.
+
+The expensive mistakes are almost all in one direction: facts placed *lower* than their required lifetime. And the most common victim is the URL's rightful property.
+
+## The most underused state container in frontend
+
+Watch what placement does. Same filter UI twice — once in component state, once in the URL. Filter, then refresh; filter, then send the link to a colleague:
+
+<StateHomes />
+
+The component-state version isn't buggy — every line of it works. It's *misplaced*. "Which slice of the catalog am I looking at" is a fact the user thinks of as part of *where they are* — and "where you are" is precisely what URLs denote. Put it there and an absurd amount of product functionality falls out for free: refresh-proofness, shareable views, working back/forward, bookmarkable searches, "open in new tab", support tickets that say *click this link* instead of *do these nine steps*.
+
+The heuristic: **if a user could plausibly want to bookmark it, share it, or return to it, it belongs in the URL.** Selected tab, search query, filters, sort order, current page, opened item, wizard step. Conversely, what fails the test stays out: hover states, half-typed drafts, anything secret.
+
+```jsx
+// The fact lives in the URL; the component just reads and writes it.
+const [params, setParams] = useSearchParams();
+const category = params.get('cat') ?? '';
+
+<select
+  value={category}
+  onChange={(e) => setParams({ cat: e.target.value }, { replace: true })}
+/>
+```
+
+Note what this is: lesson two's move, again. The URL is a *lifted* single source of truth — lifted clean out of your application, into the browser. The component owns nothing; it renders what the URL says and reports what the user did. (One craft note: use `replace` for rapid-fire refinements like typing in a filter, so you don't bury the back button under forty history entries — the URL is shared infrastructure, and littering it has UX consequences.)
+
+## The remaining rungs, briefly and opinionatedly
+
+**Global stores are for genuinely global facts** — the theme, the current user, the open modal — not for "passing props got annoying." Reach for shared state when the *fact* is shared, not when the plumbing is tedious; tedious plumbing has cheaper fixes (composition, context at the right level) than making everything global. A store full of single-reader values is a junk drawer with a subscription API.
+
+**`localStorage` is for device-scoped preferences** — theme, dismissed banners, draft recovery. Its sharp edges: it's synchronous, stringly-typed, absent in some private modes, and *invisible to your server*. The classic misuse is storing things the server needs (auth state, cart contents) where the server can't see them. This site keeps your reading progress in `localStorage` — the honest placement, because it's a private, per-device convenience and we'd rather not run a database about you.
+
+**The server is for truth that matters** — anything shared between users, anything with money attached, anything the user would be upset to lose with the device. The full price of this rung is the next lesson.
+
+<div class="aside">
+
+**Placement is per-fact, not per-feature.** A search page might keep the query in the URL (shareable), the focused-suggestion index in component state (ephemeral), recent searches in `localStorage` (device convenience), and results in the server cache (truth). Four facts, four correct homes, one feature. Teams that pick "one place for everything" are answering a per-fact question at the wrong granularity.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Run the bookmark test on your app's main screen.** Set filters, refresh. If the page forgets, you've found URL-shaped state in component housing — usually an afternoon's fix that users actually notice.
+2. **Before each new `useState`, spend the five seconds:** *who needs this, and how long should it live?* The answer is usually "just me, briefly" — and then `useState` is right. The five seconds are for the times it isn't.
+3. **Audit your global store for tenants who don't belong** — values read by one component, or derivable, or URL-shaped. Evict downward; the store gets smaller and the bugs get fewer.
+
+---
+
+**The takeaway:** placement answers lifetime, reach, and shareability — so place each fact as close as possible and as durable as required, and give the URL what is rightfully the URL's. One rung got deliberately short-changed here: the server, where the truth is real but arrives late, gets stale, and lies to you in subtle ways. That cache and its discontents are next.

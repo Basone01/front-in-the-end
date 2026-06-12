@@ -1,0 +1,149 @@
+---
+// Lesson 1 exhibit: an interactive "app" with no JavaScript at all.
+// Plan picker (radio + :has), price display, popover, accordion, live
+// native validation. View source: there is no <script> here.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: zero JavaScript"
+  caption="Plan tabs, a price 'calculator', a popover, an accordion, and live email validation. Open devtools: this exhibit ships no JavaScript — it's HTML, CSS, and the browser doing their jobs."
+>
+  <form class="docapp" onsubmit="return false">
+    <fieldset class="plans">
+      <legend>Coffee subscription</legend>
+      <label><input type="radio" name="docapp-plan" value="s" checked /> Sampler</label>
+      <label><input type="radio" name="docapp-plan" value="m" /> Regular</label>
+      <label><input type="radio" name="docapp-plan" value="l" /> Obsessive</label>
+    </fieldset>
+
+    <p class="price" aria-live="polite">
+      <span class="p-s"><strong>$9/mo</strong> — one bag, single origin</span>
+      <span class="p-m"><strong>$16/mo</strong> — two bags, rotating roasters</span>
+      <span class="p-l"><strong>$28/mo</strong> — four bags + tasting notes</span>
+    </p>
+
+    <p class="row">
+      <label
+        >Email
+        <input type="email" name="docapp-email" required placeholder="you@example.com" />
+      </label>
+      <button type="button" popovertarget="docapp-info" class="ghost">what do I get?</button>
+    </p>
+
+    <div id="docapp-info" popover>
+      <strong>Every month:</strong> freshly roasted beans, shipped on the 1st. Pause or skip
+      anytime. This popover opens and closes with the <code>popover</code> attribute — still no
+      JavaScript.
+    </div>
+
+    <details>
+      <summary>Can I cancel?</summary>
+      <p>
+        Anytime, from your account page. (And yes — this accordion is a
+        <code>&lt;details&gt;</code> element.)
+      </p>
+    </details>
+  </form>
+</Demo>
+
+<style>
+  .docapp {
+    max-width: 34rem;
+    font-size: 0.92rem;
+  }
+
+  .plans {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.6rem 0.9rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .plans legend {
+    font-style: italic;
+    padding-inline: 0.3rem;
+  }
+
+  .plans label {
+    cursor: pointer;
+  }
+
+  .plans label:has(input:checked) {
+    color: var(--accent);
+    font-weight: 640;
+  }
+
+  /* The "price calculator": show the line matching the checked radio. */
+  .price span {
+    display: none;
+  }
+
+  .docapp:has(input[value='s']:checked) .p-s,
+  .docapp:has(input[value='m']:checked) .p-m,
+  .docapp:has(input[value='l']:checked) .p-l {
+    display: inline;
+  }
+
+  .row {
+    display: flex;
+    gap: 0.8rem;
+    align-items: end;
+    flex-wrap: wrap;
+  }
+
+  .row label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  /* Live validation, courtesy of the browser. */
+  .docapp input:user-valid {
+    border-color: var(--ok);
+  }
+
+  .docapp input:user-invalid {
+    border-color: #c33;
+  }
+
+  .docapp label:has(input:user-valid)::after {
+    content: '✓ looks good';
+    color: var(--ok);
+    font-size: 0.75rem;
+  }
+
+  .docapp label:has(input:user-invalid)::after {
+    content: '✕ not an email yet';
+    color: #c33;
+    font-size: 0.75rem;
+  }
+
+  .ghost {
+    background: none !important;
+    color: var(--accent) !important;
+    border: 1px solid var(--accent) !important;
+  }
+
+  [popover] {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    color: var(--ink);
+    padding: 1rem 1.2rem;
+    max-width: 26rem;
+    font-size: 0.9rem;
+  }
+
+  details {
+    margin-top: 0.8rem;
+    border-top: 1px dashed var(--line);
+    padding-top: 0.6rem;
+  }
+
+  summary {
+    cursor: pointer;
+  }
+</style>

@@ -1,0 +1,86 @@
+---
+title: The document is enough
+description: Every frontend architecture is a workaround for something documents couldn't do. Know what documents can do, or you'll pay for workarounds you didn't need.
+track: rendering
+order: 1
+duration: 11 min
+---
+
+import DocumentApp from '../../../components/demos/DocumentApp.astro';
+
+Here is the claim this whole track rests on: **the web's default architecture — documents, links, and forms — is a complete, working application platform**, and every technology we'll meet later (SPAs, SSR, hydration, islands) exists to patch a specific hole in it. If you don't know exactly what the document can do, you can't know which holes you actually have. You'll buy patches for holes that were never there.
+
+Most frontend engineers learned the stack top-down: hired into a React codebase, framework first, platform later or never. That's not a moral failing — it's just the order the industry teaches things now. But it produces a specific blind spot: you reach for `useState` before asking whether the state already exists somewhere, and for a framework before asking whether the browser already does the job.
+
+So lesson one is a tour of the platform you already shipped on, whether you knew it or not.
+
+## The original state management
+
+A "web app" in 1995 had a complete state model, and it's worth spelling out because it's still underneath everything you build:
+
+- **The URL is the client state.** Which page you're on, which product you're viewing, which page of results — all encoded in the address. Shareable, bookmarkable, back-button-able, for free.
+- **The server is the source of truth.** Your cart, your account, the inventory — they live in one place, and every page load is a fresh read of it.
+- **Forms are the writes.** A `<form>` is a state mutation with a built-in UI: it collects input, validates it, serializes it, submits it, and the server responds with the new state of the world as a fresh document.
+
+Notice what's *absent* from this model: client-side state that can drift out of sync with the server. There is exactly one copy of the truth, and the browser renders snapshots of it. An enormous class of bugs you fight daily — stale caches, optimistic updates gone wrong, two components disagreeing about whether the modal is open — **cannot exist** in this architecture. We didn't eliminate those bugs as the web matured; we *introduced* them, in exchange for other things. The rest of this track is about when that exchange is worth it.
+
+## What HTML and CSS do without your help
+
+The browser is the most battle-tested UI runtime ever shipped, and a remarkable amount of "app behavior" is built in. A quick inventory of things that need **zero JavaScript**:
+
+- **Navigation** — links, with caching, prefetching (`rel="prefetch"`), history, and a loading indicator.
+- **Disclosure UI** — `<details>`/`<summary>` is an accordion with keyboard support and accessibility semantics you'd need a library to match.
+- **Overlays** — the `popover` attribute gives you dismissable popups with focus handling; `<dialog>` does modals.
+- **Form validation** — `required`, `type="email"`, `pattern`, `min`/`max`, with error UI, focus management, and the `:user-valid`/`:user-invalid` styling hooks.
+- **Conditional rendering** — CSS `:checked`, `:has()`, and sibling selectors can show and hide UI based on user input. (Yes, this is "state-driven rendering". The state lives in the input elements, where the browser manages it.)
+- **Smooth scrolling, sticky headers, carousels** (`scroll-snap`), **animations** (`@keyframes`, view transitions), **theming** (`prefers-color-scheme`)…
+
+Don't take the list's word for it. Everything below is HTML and CSS only — open devtools and look for the script that isn't there:
+
+<DocumentApp />
+
+The plan picker is radio buttons. The price "calculator" is the `:has()` selector showing the line that matches the checked radio. The popover is an attribute. The validation is the browser's. None of it can break when a CDN hiccups, none of it ships bytes to parse, and all of it came with accessibility and keyboard handling we didn't write.
+
+<div class="aside">
+
+**The cost honesty clause.** This track will not pretend trade-offs don't exist, so: CSS-driven UI state has real limits. The state isn't inspectable like a JS store, complex logic becomes selector golf, and there's no way to *react* to it (log it, persist it, sync it). The demo above is near the ceiling of what's reasonable. The point is not "build apps in CSS" — it's that the floor of "needs JavaScript" is far higher than most engineers think.
+
+</div>
+
+## Reading this as a React developer
+
+If your daily work is React, translate the document model into your vocabulary, because the mapping is exact:
+
+- A page load is a **render**: the server is a component that takes the request and returns UI.
+- The URL is **lifted state** — lifted all the way out of the component tree, into the browser chrome.
+- A form submission is a **state transition**: input event, reducer on the server, re-render.
+
+This is why React Server Components and frameworks like Remix feel "new but familiar": they are re-deriving the document model inside React's vocabulary. `<Form>` in Remix is `<form>` with the page-reload flash removed. A server component is a PHP page that learned composition. The platform's model was never wrong — it was *incomplete*, and we'll spend the next lessons finding exactly where.
+
+## When the document really is enough
+
+Here's the opinion, stated plainly: **if your product is content people read, or short transactions people complete, the document architecture isn't a fallback — it's the correct choice**, and adding a client-side application to it makes it slower, more fragile, and more expensive to build.
+
+Concretely, the document wins when:
+
+- **Sessions are short.** Nobody amortizes a 400 KB bundle across a 40-second visit.
+- **The truth lives on the server anyway.** If every meaningful action needs the server (checkout, search, publishing), client state is just a cache you now have to keep honest.
+- **Strangers matter.** Search engines, link previews, first-time visitors on hotel wifi — they all consume HTML, not your hydrated app.
+
+A blog, a documentation site, a news site, a government form, a store's browsing experience: documents. Not "documents until we can afford to rebuild it properly". Documents, *as the proper build*.
+
+## Where the wall is
+
+And yet. Try to build any of the following with pure documents and you hit a wall, hard:
+
+- Anything that updates **without the user asking** — live prices, presence, notifications.
+- Anything with **rapid feedback loops** — typeahead search, drag-and-drop, a drawing canvas.
+- Anything where the user **builds up state across many small interactions** — a filter panel, a multi-step editor, a seat picker — and a full page reload per interaction would destroy the experience.
+
+The document model's weakness is precisely its strength inverted: the only unit of update is *the whole page*. In 1995 the answer was "live with it". The answer the industry actually chose was JavaScript — first a sprinkle, then an avalanche.
+
+That avalanche is the next lesson. Before moving on, though, keep the inventory above somewhere handy. The most common over-engineering in frontend isn't choosing the wrong framework — it's reaching for *any* framework to rebuild something the browser was already doing, for free, with better accessibility than the rebuild.
+
+---
+
+**The takeaway:** the document architecture is a complete application model with exactly one copy of the truth — and an enormous class of modern frontend bugs is the price of abandoning it. Abandon it only when you're getting something specific in return. Next lesson: the first, cheapest way to pay — a sprinkle of JavaScript that enhances a working document instead of replacing it.

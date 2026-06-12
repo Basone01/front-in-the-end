@@ -1,0 +1,81 @@
+---
+title: Server state is not your state
+description: What your components hold is never the server's truth — it's a snapshot, aging since the moment it arrived. Treat it as a cache, because that's what it is whether you admit it or not.
+track: state
+order: 4
+duration: 12 min
+---
+
+import StaleCache from '../../../components/demos/StaleCache.astro';
+
+The ladder's top rung deserves its own lesson, because it's not really a rung — it's a different building. Every other home on the ladder holds state your code *owns*: you write it, you read it, it changes when you change it. Server state breaks every one of those assumptions. You don't own it; you're shown it. It changes without telling you — another tab, another user, a cron job. And what your component holds after a fetch is not "the data": it's **a photograph of the data, aging from the moment the shutter clicked**.
+
+The claim: **the moment you `fetch`, you are operating a cache** — with all of a cache's classic problems: staleness, invalidation, and consistency between copies. The only choice you get is whether to operate it deliberately or by accident. Most codebases choose by accident, one `useState` at a time.
+
+## The accidental cache
+
+Here's the pattern, which you have written and so have I:
+
+```jsx
+function ProfileForm() {
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    fetch('/api/users/42').then(r => r.json()).then(setUser);
+  }, []);
+  // …
+}
+```
+
+Innocent. Local. And now count the copies: the header component did the same thing last week, so the user now exists in the database, in the header's state, and in the form's state — **three homes for one fact**, in direct violation of lesson two, except this time you can't "lift" your way out, because one of the homes is on another computer.
+
+Watch the violation pay out. Both components fetched their own snapshot; edit the name and save:
+
+<StaleCache />
+
+The server is updated. The form is updated — it wrote its own copy. The header still greets the old name, *and there is no bug in the header's code*. It fetched correctly, rendered correctly, and was never told anything changed. That's the signature of accidental caching: every component is locally correct, and the app is wrong.
+
+## Naming the problem changes the solution
+
+While the data was "just state," the fix looked like more state plumbing — pass a callback up, sprinkle a context, have the form poke the header. Teams build elaborate versions of this and each one adds a sync rule of exactly the kind lesson two warned about.
+
+Name the data honestly — *a client-side cache of server truth* — and forty years of caching wisdom snaps into place as the requirements list:
+
+- **One cache, keyed by what the data is.** Not per-component copies. `['user', 42]` is the fact's name; everyone who wants it asks the cache, and identical requests deduplicate into one flight.
+- **Staleness is a property, not a surprise.** Every entry is aging; the cache should know how old is too old, and refresh in the background while showing what it has (stale-while-revalidate — show the photo, reshoot it quietly).
+- **Writes invalidate.** A mutation is the one moment you *know* the photograph is wrong. Saving the profile must mark `['user', 42]` stale, so every reader refetches — including the header, which still doesn't know the form exists.
+
+Flip the demo to cache mode and run the same edit: the header heals itself, not because anyone told it to, but because its data source noticed reality changed. The components still don't know about each other. **The coordination moved out of the component graph and into the cache, where it's a data policy instead of a web of callbacks.**
+
+## This is why query libraries exist
+
+TanStack Query, SWR, RTK Query, Apollo's cache — strip their marketing and each one is the requirements list above, implemented well: a keyed, deduplicating, staleness-aware, invalidate-on-write cache with loading and error states attached.
+
+```jsx
+// The same form, with the cache made explicit:
+const { data: user } = useQuery({ queryKey: ['user', 42], queryFn: fetchUser });
+
+const save = useMutation({
+  mutationFn: updateUser,
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 42] }),
+});
+```
+
+The point of this lesson is *not* "install TanStack Query" (though: usually, yes). The point is that these libraries are not data-fetching conveniences — **they are cache managers**, and the reason they swept the ecosystem is that they replaced ten thousand hand-rolled, accidentally-inconsistent caches with one deliberate one. If you understand *why* the demo's cache mode works, you understand what you're holding when you hold a query library — and you'll use its invalidation machinery correctly instead of cargo-culting `refetch()` calls until the bug goes away.
+
+The same understanding tells you what *not* to do: *don't copy query data into `useState`*. The moment you `setUser(data)` you've forked the photograph — re-created the accidental cache one layer down, where no invalidation can reach it. Render from the query. (The legitimate exception is lesson two's draft: form editing state, named as a draft, reconciled on save.)
+
+<div class="aside">
+
+**Why not just refetch everything constantly?** Because the photograph metaphor has a budget attached: refetching is latency, battery, and server load, and "always fresh" is unbuyable anyway — even a 50ms-old response is a snapshot by arrival. The game isn't freshness; it's *bounded, chosen* staleness: how wrong can this particular data afford to be, and which events (mutations, tab focus, reconnect) must force the bound to zero? Stock prices and seat maps: seconds matter. A user's display name: minutes are fine. That's a product decision, surfaced as a `staleTime` — and having a dial for it is exactly what "operating the cache deliberately" means.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Count `fetch`-into-`useState` sites in your codebase.** Each is a private cache with no invalidation story. You don't have to fix them all; you do have to know how many independent photographs of the database your UI is juggling.
+2. **Adopt the keying discipline even without a library.** One module owns fetching per entity; components ask it. Worst case you've organized your fetches; best case you've made the library migration trivial.
+3. **After every mutation, ask: who else is showing this fact?** If the answer takes more than a sentence, you need invalidation, not callbacks.
+
+---
+
+**The takeaway:** server data in the client is a cache — keyed, aging, and in need of invalidation on every write — and the bugs come from operating it without admitting it exists. One lesson left in this track: putting the whole toolkit together to design a real feature's state on purpose, fact by fact.

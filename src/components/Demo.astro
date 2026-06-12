@@ -1,0 +1,32 @@
+---
+// The shared demo frame: every interactive exhibit gets a labeled bar, an
+// optional reset, and a caption. Reset dispatches a `demo-reset` event on the
+// <figure>; each demo's script listens and restores its initial state.
+interface Props {
+  title: string;
+  reset?: boolean;
+  caption?: string;
+}
+
+const { title, reset = false, caption } = Astro.props;
+---
+
+<figure class="demo" data-demo>
+  <figcaption class="demo-bar">
+    <span class="demo-dot" aria-hidden="true"></span>
+    <span>{title}</span>
+    {reset && <button class="demo-reset" data-demo-reset>reset</button>}
+  </figcaption>
+  <div class="demo-body">
+    <slot />
+  </div>
+  {caption && <p class="demo-caption">{caption}</p>}
+</figure>
+
+<script>
+  document.querySelectorAll('[data-demo-reset]').forEach((button) => {
+    button.addEventListener('click', () => {
+      button.closest('[data-demo]')?.dispatchEvent(new CustomEvent('demo-reset'));
+    });
+  });
+</script>

@@ -1,0 +1,137 @@
+---
+// State lesson 1 exhibit: the same cart twice. One stores the total as its
+// own piece of state and updates it in every handler (except the one a
+// teammate wrote); one derives it. Only one of them can drift.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: stored vs derived"
+  reset
+  caption="Both carts run the same code for items. The left one also stores the total and trusts every code path to update it — the remove handler was added later and forgets. The right one computes the total from the items, so there is nothing to forget."
+>
+  <div id="svd-root" class="cols">
+    {
+      ['stored', 'derived'].map((kind) => (
+        <section class="pane">
+          <div class="pane-chrome">{kind === 'stored' ? 'total is stored state' : 'total is derived'}</div>
+          <div class="pane-screen">
+            <ul class="items" data-items={kind} />
+            <p class="total">
+              total: <strong data-total={kind}>$0</strong>
+              <span class="drift" data-drift={kind} hidden>
+                ≠ items! (off by <span data-driftby={kind} />)
+              </span>
+            </p>
+            <p class="row">
+              <button data-add={kind} type="button">add item</button>
+              <button data-removelast={kind} type="button">remove last</button>
+            </p>
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</Demo>
+
+<style>
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .items {
+    list-style: none;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    font-size: 0.85rem;
+    min-height: 5.2em;
+  }
+
+  .items :global(li) {
+    border-bottom: 1px dashed var(--line);
+    padding-block: 0.15rem;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .total {
+    font-size: 0.9rem;
+  }
+
+  .drift {
+    color: #c33;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    margin-left: 0.5rem;
+  }
+
+  .row {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0;
+  }
+</style>
+
+<script>
+  const root = document.getElementById('svd-root');
+  if (root) {
+    const catalog = [
+      ['Monstera', 34],
+      ['Snake plant', 22],
+      ['Pothos', 18],
+      ['Fiddle-leaf fig', 45],
+      ['Cactus', 12],
+    ] as const;
+
+    const el = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
+
+    function makeCart(kind: 'stored' | 'derived') {
+      let items: { name: string; price: number }[] = [];
+      let storedTotal = 0; // only the 'stored' cart uses this
+
+      const list = el(`[data-items="${kind}"]`);
+      const totalEl = el(`[data-total="${kind}"]`);
+      const driftEl = el(`[data-drift="${kind}"]`);
+      const driftBy = el(`[data-driftby="${kind}"]`);
+
+      const realTotal = () => items.reduce((sum, item) => sum + item.price, 0);
+
+      function paint() {
+        list.innerHTML = items
+          .map((item) => `<li><span>${item.name}</span><span>$${item.price}</span></li>`)
+          .join('');
+        const shown = kind === 'stored' ? storedTotal : realTotal();
+        totalEl.textContent = `$${shown}`;
+        const drift = shown - realTotal();
+        driftEl.hidden = drift === 0;
+        driftBy.textContent = `$${Math.abs(drift)}`;
+      }
+
+      el(`[data-add="${kind}"]`).onclick = () => {
+        const [name, price] = catalog[items.length % catalog.length];
+        items.push({ name, price });
+        storedTotal += price; // the add handler remembers to sync
+        paint();
+      };
+
+      el(`[data-removelast="${kind}"]`).onclick = () => {
+        items.pop();
+        // ...the remove handler, written six months later, does not.
+        paint();
+      };
+
+      return () => {
+        items = [];
+        storedTotal = 0;
+        paint();
+      };
+    }
+
+    const resets = [makeCart('stored'), makeCart('derived')];
+    const resetAll = () => resets.forEach((reset) => reset());
+    root.closest('[data-demo]')?.addEventListener('demo-reset', resetAll);
+    resetAll();
+  }
+</script>

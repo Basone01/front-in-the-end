@@ -1,0 +1,164 @@
+---
+// Async lesson 1 exhibit: the same fetch twice. The optimist handles the
+// success path; the state machine handles reality. Crank the failure rate.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the four states of a fetch"
+  reset
+  caption="Load both a few times with failure at 50%. The optimist's blank silence on error isn't an edge case you forgot — it's a state you never wrote. The machine can't forget: every state has pixels."
+>
+  <div id="fst-root">
+    <div class="controls">
+      <button id="fst-load" type="button">load the forecast</button>
+      <label>latency <input type="range" id="fst-lat" min="200" max="2000" step="100" value="800" /></label>
+      <label>failure <output id="fst-failout">30</output>% <input type="range" id="fst-fail" min="0" max="90" step="10" value="30" /></label>
+    </div>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome">the optimist (success path only)</div>
+        <div class="pane-screen">
+          <p class="forecast" id="fst-naive">—</p>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">
+          the state machine
+          <span class="phase" id="fst-state">idle</span>
+        </div>
+        <div class="pane-screen" id="fst-machine">
+          <p class="forecast" id="fst-good">—</p>
+          <p class="spinner-line" id="fst-loading" hidden>fetching forecast…</p>
+          <p class="error" id="fst-error" hidden>
+            Couldn't load the forecast.
+            <button id="fst-retry" type="button">retry</button>
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .controls {
+    display: flex;
+    gap: 1.1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .controls label {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .phase {
+    margin-left: auto;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    padding: 0 0.5rem;
+  }
+
+  .forecast {
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .spinner-line {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    margin: 0.4rem 0 0;
+  }
+
+  .error {
+    color: #c33;
+    font-size: 0.85rem;
+    margin: 0.4rem 0 0;
+  }
+
+  .error button {
+    margin-left: 0.4rem;
+    font-size: 0.75rem !important;
+    padding: 0.15rem 0.5rem !important;
+  }
+</style>
+
+<script>
+  import { fakeFetch } from '../../lib/fake-network';
+
+  const root = document.getElementById('fst-root');
+  if (root) {
+    const FORECASTS = ['☀️ 34°, merciless sun', '🌧 28°, dramatic rain', '⛅ 31°, indecisive clouds'];
+    const latInput = document.getElementById('fst-lat') as HTMLInputElement;
+    const failInput = document.getElementById('fst-fail') as HTMLInputElement;
+    const failOut = document.getElementById('fst-failout') as HTMLOutputElement;
+    failInput.addEventListener('input', () => (failOut.value = failInput.value));
+
+    const naive = document.getElementById('fst-naive') as HTMLElement;
+    const good = document.getElementById('fst-good') as HTMLElement;
+    const loading = document.getElementById('fst-loading') as HTMLElement;
+    const errorEl = document.getElementById('fst-error') as HTMLElement;
+    const stateBadge = document.getElementById('fst-state') as HTMLElement;
+
+    const opts = () => ({ failRate: Number(failInput.value) / 100 });
+    const pick = () => FORECASTS[Math.floor(Math.random() * FORECASTS.length)];
+
+    // --- The optimist ----------------------------------------------------
+    async function naiveLoad() {
+      naive.textContent = '—'; // not even a loading state, just... blank
+      try {
+        await fakeFetch(Number(latInput.value), opts());
+        naive.textContent = pick();
+      } catch {
+        // (this catch exists only so the demo doesn't throw; the optimist's
+        // real code has nothing here, and neither does this UI)
+      }
+    }
+
+    // --- The state machine ------------------------------------------------
+    type State = 'idle' | 'loading' | 'success' | 'error';
+    function setState(state: State, data?: string) {
+      stateBadge.textContent = state;
+      loading.hidden = state !== 'loading';
+      errorEl.hidden = state !== 'error';
+      if (state === 'success' && data) good.textContent = data;
+      if (state === 'loading' && good.textContent === '—') good.textContent = '';
+    }
+
+    async function machineLoad() {
+      setState('loading');
+      try {
+        await fakeFetch(Number(latInput.value), opts());
+        setState('success', pick());
+      } catch {
+        setState('error');
+      }
+    }
+
+    (document.getElementById('fst-load') as HTMLButtonElement).onclick = () => {
+      void naiveLoad();
+      void machineLoad();
+    };
+    (document.getElementById('fst-retry') as HTMLButtonElement).onclick = () => void machineLoad();
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      naive.textContent = '—';
+      good.textContent = '—';
+      setState('idle');
+    });
+  }
+</script>

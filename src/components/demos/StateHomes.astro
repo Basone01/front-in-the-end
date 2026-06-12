@@ -1,0 +1,198 @@
+---
+// State lesson 3 exhibit: the same filter UI with its state living in two
+// different homes. Component state dies on refresh and can't be shared; URL
+// state survives both — because the browser owns it.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: where the filter lives"
+  reset
+  caption="Set a filter, then refresh the fake browser and 'share the link' to the second tab. Component state evaporates; URL state is bookmarkable, shareable, and refresh-proof — for free."
+>
+  <div id="sth-root">
+    <label class="mode">
+      <input type="checkbox" id="sth-url" />
+      keep the filter in the URL
+    </label>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome">your tab</div>
+        <div class="addr">
+          <span id="sth-address">plants.example/catalog</span>
+          <button id="sth-refresh" type="button">⟳ refresh</button>
+        </div>
+        <div class="pane-screen">
+          <p class="row">
+            <select id="sth-cat">
+              <option value="">all plants</option>
+              <option value="easy">easy care</option>
+              <option value="fussy">fussy</option>
+            </select>
+          </p>
+          <ul class="plants" id="sth-list"></ul>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">your colleague's tab</div>
+        <div class="addr"><span id="sth-address2">—</span></div>
+        <div class="pane-screen">
+          <p class="row">
+            <button id="sth-share" type="button">📋 open the link you sent them</button>
+          </p>
+          <ul class="plants" id="sth-list2"></ul>
+        </div>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .mode {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    margin-bottom: 0.9rem;
+    cursor: pointer;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .addr {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    background: var(--bg-inset);
+    border-bottom: 1px solid var(--line);
+    padding: 0.3rem 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+  }
+
+  .addr span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .addr button {
+    font-size: 0.68rem !important;
+    padding: 0.1rem 0.4rem !important;
+    background: var(--bg) !important;
+    color: var(--ink-soft) !important;
+    border: 1px solid var(--line) !important;
+  }
+
+  .plants {
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+
+  .plants :global(li) {
+    padding-block: 0.12rem;
+  }
+
+  .row {
+    margin: 0;
+  }
+
+  select {
+    font: inherit;
+    font-size: 0.85rem;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.25rem 0.4rem;
+  }
+</style>
+
+<script>
+  const root = document.getElementById('sth-root');
+  if (root) {
+    const PLANTS = [
+      { name: '🪴 Pothos', cat: 'easy' },
+      { name: '🌵 Cactus', cat: 'easy' },
+      { name: '🌿 Snake plant', cat: 'easy' },
+      { name: '🌳 Fiddle-leaf fig', cat: 'fussy' },
+      { name: '🌺 Orchid', cat: 'fussy' },
+    ];
+
+    const urlMode = document.getElementById('sth-url') as HTMLInputElement;
+    const select = document.getElementById('sth-cat') as HTMLSelectElement;
+    const address = document.getElementById('sth-address') as HTMLElement;
+    const address2 = document.getElementById('sth-address2') as HTMLElement;
+    const list = document.getElementById('sth-list') as HTMLElement;
+    const list2 = document.getElementById('sth-list2') as HTMLElement;
+
+    let componentState = ''; // dies on "refresh"
+    let urlState = ''; // lives in the fake address bar
+
+    const filter = () => (urlMode.checked ? urlState : componentState);
+
+    function renderList(target: HTMLElement, cat: string) {
+      const shown = PLANTS.filter((p) => !cat || p.cat === cat);
+      target.innerHTML = shown.map((p) => `<li>${p.name}</li>`).join('');
+    }
+
+    function paint() {
+      select.value = filter();
+      address.textContent =
+        'plants.example/catalog' + (urlMode.checked && urlState ? `?cat=${urlState}` : '');
+      renderList(list, filter());
+    }
+
+    select.addEventListener('change', () => {
+      if (urlMode.checked) urlState = select.value;
+      else componentState = select.value;
+      paint();
+    });
+
+    (document.getElementById('sth-refresh') as HTMLButtonElement).onclick = () => {
+      // A refresh destroys the component and everything it remembered.
+      // The URL, of course, survives — that's what URLs are.
+      componentState = '';
+      const screen = select.closest('.pane-screen') as HTMLElement;
+      screen.classList.add('is-blank');
+      setTimeout(() => {
+        screen.classList.remove('is-blank');
+        paint();
+      }, 350);
+    };
+
+    (document.getElementById('sth-share') as HTMLButtonElement).onclick = () => {
+      // The colleague gets exactly what the URL carries: all of the URL
+      // state, none of the component state.
+      address2.textContent =
+        'plants.example/catalog' + (urlMode.checked && urlState ? `?cat=${urlState}` : '');
+      renderList(list2, urlMode.checked ? urlState : '');
+    };
+
+    urlMode.addEventListener('change', () => {
+      urlState = urlMode.checked ? componentState : '';
+      paint();
+    });
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      urlMode.checked = false;
+      componentState = urlState = '';
+      address2.textContent = '—';
+      list2.innerHTML = '';
+      paint();
+    });
+
+    paint();
+  }
+</script>

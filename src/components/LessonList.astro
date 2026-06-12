@@ -1,0 +1,33 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  lessons: CollectionEntry<'lessons'>[];
+}
+
+const lessons = Astro.props.lessons.toSorted((a, b) => a.data.order - b.data.order);
+---
+
+<ol class="lesson-list">
+  {
+    lessons.map((lesson) => (
+      <li data-lesson-id={lesson.id}>
+        <span class="num">{String(lesson.data.order).padStart(2, '0')}</span>
+        <a href={`/lessons/${lesson.id}/`}>{lesson.data.title}</a>
+        <span class="tick" aria-label="read">
+          ✓
+        </span>
+        <span class="dur">{lesson.data.duration}</span>
+      </li>
+    ))
+  }
+</ol>
+
+<script>
+  import { getRead } from '../lib/progress';
+
+  const read = new Set(getRead());
+  document.querySelectorAll<HTMLElement>('[data-lesson-id]').forEach((li) => {
+    li.dataset.read = String(read.has(li.dataset.lessonId ?? ''));
+  });
+</script>

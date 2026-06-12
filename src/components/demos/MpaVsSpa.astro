@@ -1,0 +1,235 @@
+---
+// Lesson 3 exhibit: the same three-page site as a classic MPA and as a SPA,
+// side by side, with a network latency slider.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: navigation under latency"
+  reset
+  caption="Click the nav links in both panes. The MPA pays full price on every navigation; the SPA pays a big bill once, then small ones. Drag the latency up and feel both bargains change."
+>
+  <div id="mvs-root">
+    <label class="latency">
+      network latency: <output id="mvs-ms">800</output>ms
+      <input type="range" id="mvs-latency" min="150" max="3000" step="50" value="800" />
+    </label>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome">
+          MPA — every click fetches a document
+          <span class="pane-loadbar" id="mvs-bar-mpa"></span>
+        </div>
+        <div class="pane-screen" id="mvs-screen-mpa">
+          <nav class="pane-nav">
+            <a data-page="home">Home</a>
+            <a data-page="catalog">Catalog</a>
+            <a data-page="about">About</a>
+          </nav>
+          <div data-page-content></div>
+        </div>
+        <ul class="demo-log" id="mvs-log-mpa"></ul>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">
+          SPA — one app, then JSON
+          <span class="pane-loadbar" id="mvs-bar-spa"></span>
+        </div>
+        <div class="pane-screen is-blank" id="mvs-screen-spa">
+          <nav class="pane-nav">
+            <a data-page="home">Home</a>
+            <a data-page="catalog">Catalog</a>
+            <a data-page="about">About</a>
+          </nav>
+          <div data-page-content></div>
+        </div>
+        <ul class="demo-log" id="mvs-log-spa"></ul>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .latency {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .latency output {
+    min-width: 4.5ch;
+    text-align: right;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .cols :global(.spinner) {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+  }
+
+  .cols :global(.spinner::after) {
+    content: '';
+    display: inline-block;
+    width: 0.7em;
+    height: 0.7em;
+    margin-left: 0.4em;
+    border: 2px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: mvs-spin 0.7s linear infinite;
+    vertical-align: -0.1em;
+  }
+
+  @keyframes mvs-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+</style>
+
+<script>
+  import { fakeFetch, stopwatch } from '../../lib/fake-network';
+
+  const root = document.getElementById('mvs-root');
+  if (root) {
+    const latencyInput = document.getElementById('mvs-latency') as HTMLInputElement;
+    const latencyOut = document.getElementById('mvs-ms') as HTMLOutputElement;
+    latencyInput.addEventListener('input', () => (latencyOut.value = latencyInput.value));
+    const latency = () => Number(latencyInput.value);
+
+    const pages: Record<string, string> = {
+      home: '<h4>Home</h4><p>Welcome to Fern &amp; Frond, purveyors of houseplants.</p>',
+      catalog:
+        '<h4>Catalog</h4><ul><li>Monstera — $34</li><li>Snake plant — $22</li><li>Pothos — $18</li></ul>',
+      about: '<h4>About</h4><p>Founded 2019. Two humans, four hundred plants.</p>',
+    };
+
+    function makeLogger(list: HTMLElement) {
+      return (text: string) => {
+        const item = document.createElement('li');
+        const time = document.createElement('span');
+        time.className = 't';
+        const clock = stopwatch();
+        time.textContent = '';
+        item.append(time, document.createTextNode(text));
+        list.prepend(item);
+        return (done: string) => {
+          time.textContent = `${clock()}ms`;
+          item.append(document.createTextNode(` ${done}`));
+        };
+      };
+    }
+
+    function animateBar(bar: HTMLElement, ms: number) {
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      requestAnimationFrame(() => {
+        bar.style.transition = `width ${ms}ms linear`;
+        bar.style.width = '92%';
+      });
+      return () => {
+        bar.style.transition = 'width 120ms linear';
+        bar.style.width = '100%';
+        setTimeout(() => (bar.style.width = '0%'), 200);
+      };
+    }
+
+    // Bumped on every reset so async work from a previous run can tell it's
+    // stale and stop touching the DOM. (Lesson three of the async track,
+    // practiced early.)
+    let generation = 0;
+
+    function setup() {
+      generation += 1;
+      const gen = generation;
+      const stale = () => gen !== generation;
+
+      // --- MPA pane -----------------------------------------------------
+      const mpaScreen = document.getElementById('mvs-screen-mpa') as HTMLElement;
+      const mpaContent = mpaScreen.querySelector('[data-page-content]') as HTMLElement;
+      const mpaLog = makeLogger(document.getElementById('mvs-log-mpa') as HTMLElement);
+      const mpaBar = document.getElementById('mvs-bar-mpa') as HTMLElement;
+
+      mpaContent.innerHTML = pages.home;
+      let mpaBusy = false;
+
+      mpaScreen.querySelectorAll<HTMLElement>('[data-page]').forEach((link) => {
+        link.onclick = async () => {
+          if (mpaBusy) return;
+          mpaBusy = true;
+          const page = link.dataset.page!;
+          mpaScreen.classList.add('is-blank'); // the white flash
+          const finishBar = animateBar(mpaBar, latency());
+          const done = mpaLog(`GET /${page === 'home' ? '' : page} (document)`);
+          await fakeFetch(latency());
+          if (stale()) return;
+          finishBar();
+          mpaContent.innerHTML = pages[page];
+          mpaScreen.classList.remove('is-blank');
+          done('→ 200, full HTML');
+          mpaBusy = false;
+        };
+      });
+
+      // --- SPA pane -----------------------------------------------------
+      const spaScreen = document.getElementById('mvs-screen-spa') as HTMLElement;
+      const spaContent = spaScreen.querySelector('[data-page-content]') as HTMLElement;
+      const spaLog = makeLogger(document.getElementById('mvs-log-spa') as HTMLElement);
+      const spaBar = document.getElementById('mvs-bar-spa') as HTMLElement;
+      let spaReady = false;
+      let spaBusy = false;
+
+      (async () => {
+        // First visit: empty HTML, then the bundle, then the app boots.
+        spaScreen.classList.add('is-blank');
+        const doneHtml = spaLog('GET / (empty shell)');
+        await fakeFetch(latency() * 0.6);
+        if (stale()) return;
+        doneHtml('→ 200, ~1 KB');
+        const finishBar = animateBar(spaBar, latency() * 2);
+        const doneJs = spaLog('GET /app.js (the whole app)');
+        await fakeFetch(latency() * 2);
+        if (stale()) return;
+        finishBar();
+        doneJs('→ 200, 480 KB');
+        spaScreen.classList.remove('is-blank');
+        spaContent.innerHTML = pages.home;
+        spaReady = true;
+      })();
+
+      spaScreen.querySelectorAll<HTMLElement>('[data-page]').forEach((link) => {
+        link.onclick = async () => {
+          if (!spaReady || spaBusy) return;
+          spaBusy = true;
+          const page = link.dataset.page!;
+          spaContent.innerHTML = '<p class="spinner">loading</p>'; // shell stays put
+          const done = spaLog(`fetch /api/${page} (JSON)`);
+          await fakeFetch(latency() * 0.5);
+          if (stale()) return;
+          spaContent.innerHTML = pages[page];
+          done('→ 200, ~2 KB');
+          spaBusy = false;
+        };
+      });
+    }
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      document.getElementById('mvs-log-mpa')!.innerHTML = '';
+      document.getElementById('mvs-log-spa')!.innerHTML = '';
+      setup();
+    });
+
+    setup();
+  }
+</script>

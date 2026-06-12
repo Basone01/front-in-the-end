@@ -1,0 +1,74 @@
+---
+title: "Optimistic updates: the kind lie"
+description: Showing success before the server confirms is a lie with a budget — cheap when failure is rare and rollback is honest, ruinous when either condition fails. Know the conditions.
+track: async
+order: 4
+duration: 11 min
+---
+
+import OptimisticLike from '../../../components/demos/OptimisticLike.astro';
+
+Everything in this track so far has been about rendering the truth: the four states honestly drawn, stale answers discarded, doomed work cancelled. This lesson is about the one place where good engineering means **rendering something you don't know to be true yet** — and doing it with a plan for being wrong.
+
+When a user taps ❤️, the truthful interface waits: spinner, round trip, confirmation, *then* the heart fills. On a 1.2-second connection that's a 1.2-second tap — and the user, whose thumb told them the tap happened instantly, experiences your honesty as lag. The optimistic interface fills the heart *now*, tells the server afterward, and deals with the rare no. It lies — by a few hundred milliseconds — about a truth it has every reason to expect.
+
+The claim: **an optimistic update is a loan against the server's answer, and like any loan it's only sound under known conditions: high probability of yes, a rollback you can actually perform, and an honest apology when the loan defaults.** Most optimistic-UI bugs are one of those three conditions quietly missing.
+
+## Feel the difference, then feel the catch
+
+Two like buttons, same flaky server. The left waits for the truth; the right borrows against it. Mash both — then crank failure to 50% and mash again:
+
+<OptimisticLike />
+
+At low failure rates the optimist is simply *better* — indistinguishable from a local app, while the pessimist turns every tap into a small loading screen. At high failure rates you feel the cost: counts that jump and retreat, the toast apologizing repeatedly. The lesson isn't "optimism good" or "optimism risky" — it's that **the same technique changes character with the failure rate**, which is why it's a per-mutation decision, not a house style.
+
+## The anatomy: snapshot, apply, reconcile
+
+The naive optimistic implementation is one line — `count++` before the fetch — and it contains a trap. When the server says no, what do you set the count *back* to? If you saved nothing, you guess (`count--`), and if anything else changed meanwhile, your guess corrupts state. Real optimism is a three-step discipline:
+
+```js
+async function likePost(postId) {
+  const snapshot = ui.getPost(postId);          // 1. remember how to undo
+  ui.applyPost(postId, { liked: true, likes: snapshot.likes + 1 });  // 2. lie
+
+  try {
+    const truth = await api.like(postId);
+    ui.applyPost(postId, truth);                // 3a. the lie comes true —
+  } catch {                                     //     adopt the server's exact version
+    ui.applyPost(postId, snapshot);             // 3b. default: restore, don't guess
+    toast('Couldn\'t save your like — undone.');
+  }
+}
+```
+
+Step 3a matters as much as 3b: on success, **reconcile to the server's answer** rather than keeping your guess — the server may have computed something you didn't (another user liked it too; the real count is +2). The optimistic value was scaffolding; the response is the building.
+
+In React-at-work terms this discipline is exactly what `useMutation`'s `onMutate` / `onError` / `onSettled` hooks are shaped like: snapshot the cache, apply the optimistic version, roll back on error, invalidate on settle. The library remembers the steps so Tuesday-afternoon code doesn't have to — but it can't decide *whether* a mutation deserves optimism. That's yours.
+
+## The three conditions, as a checklist
+
+**1. Is "yes" overwhelmingly likely?** Likes, follows, toggles, reorderings — requests that validate trivially and conflict rarely — run at 99.9% yes. A payment, a username claim, a seat reservation: the server's answer carries real information, and pre-announcing it is writing checks reality may bounce. The demo's 50% slider is what optimism feels like applied to the wrong mutation.
+
+**2. Can you actually roll back?** A heart un-fills; a row un-moves. Fine. But some effects don't undo: a sent message *read by its recipient*, a confirmation email, anything that triggered downstream behavior the user observed and acted on. If rollback can't restore the *user's* world — not just your store — the mutation isn't an optimism candidate. (This is also why optimistic UI pairs with a snapshot, never a guess: rollback must be exact or it's just a second bug.)
+
+**3. Will the user see the apology?** Rollback that happens off-screen is data loss wearing a UX pattern. The user who liked, scrolled on, and never saw the heart un-fill believes a lie you have no record of telling. The apology channel — toast with the failure, ideally with a retry — is a load-bearing part of the pattern, not polish. If a surface has no way to apologize, it has no business borrowing.
+
+<div class="aside">
+
+**The queue variation.** Chat apps run optimism's most advanced form: the message appears instantly with a pending tick, sends in the background, and *failures mark the item* ("not delivered — tap to retry") instead of removing it. That's optimistic UI with the rollback replaced by a visible per-item status — better than deletion when the user's input is too valuable to vanish. The principle generalizes: the worse the rollback, the more visible the pending state should be. (Notice the spectrum: at maximum pending-visibility you've reinvented the honest spinner. Optimism and honesty are endpoints of one dial.)
+
+</div>
+
+## What optimism is *not* for
+
+A boundary worth drawing because it's crossed so often: **optimistic updates fix perceived latency on writes the user already decided.** They don't fix slow reads (that's caching and lesson one's stale-while-revalidate), they don't fix doomed work (lesson three), and they absolutely don't fix a slow server — they hide it, until the day the failure rate rises and your interface starts gaslighting users at scale. If a mutation fails more than rarely, the fix is the backend, not braver lying.
+
+## How to apply this on Monday
+
+1. **Inventory your app's mutations and sort them by the three conditions.** Toggles and reorderings: optimism candidates. Money, uniqueness, anything with a recipient: pessimism with a good pending state.
+2. **Grep existing optimistic code for the snapshot.** `count - 1`-style rollbacks are guesses; convert them to snapshot-restore before they meet concurrent edits.
+3. **Test the failure path on purpose** — devtools offline mode, then tap the heart. If you don't see an apology, neither will your users; they'll just see their like quietly evaporate.
+
+---
+
+**The takeaway:** optimism is a loan — borrow only against near-certain yeses, hold a snapshot so rollback is exact, and apologize where the user will see it; everywhere else, an honest pending state is the better interface. One lesson left: the rest of being honest — retries, double submits, idempotency, and the errors that deserve better UI than they get.

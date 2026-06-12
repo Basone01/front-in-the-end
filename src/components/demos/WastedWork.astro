@@ -1,0 +1,176 @@
+---
+// Async lesson 3 exhibit: the same fast typist, three strategies. Count what
+// each one costs the network and the server.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the cost of every keystroke"
+  reset
+  caption="Same typist, same query, three strategies. 'Fire everything' answers fastest and wastes the most; debounce sheds the load before it exists; abort cleans up what debounce still let through. Most real search boxes want both."
+>
+  <div id="wwk-root">
+    <div class="controls">
+      <label>
+        strategy
+        <select id="wwk-strategy">
+          <option value="naive">fire everything (naive)</option>
+          <option value="debounce">debounce 300ms</option>
+          <option value="both">debounce + abort in-flight</option>
+        </select>
+      </label>
+      <button id="wwk-auto" type="button">auto-type “bangkok”</button>
+    </div>
+
+    <div class="meters">
+      <div class="meter"><strong id="wwk-fired">0</strong> requests fired</div>
+      <div class="meter"><strong id="wwk-aborted">0</strong> aborted mid-flight</div>
+      <div class="meter"><strong id="wwk-wasted">0</strong> answered &amp; thrown away</div>
+      <div class="meter"><strong id="wwk-used">0</strong> actually shown</div>
+    </div>
+
+    <ul class="demo-log" id="wwk-log"></ul>
+  </div>
+</Demo>
+
+<style>
+  .controls {
+    display: flex;
+    gap: 1.1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+    font-size: 0.85rem;
+  }
+
+  .controls select {
+    font: inherit;
+    font-size: 0.82rem;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+    margin-left: 0.4rem;
+  }
+
+  .meters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .meter {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+    padding: 0.45rem 0.7rem;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--ink-soft);
+  }
+
+  .meter strong {
+    display: block;
+    font-size: 1.15rem;
+    color: var(--ink);
+  }
+
+  #wwk-log {
+    max-height: 9em;
+  }
+</style>
+
+<script>
+  import { fakeFetch, wait } from '../../lib/fake-network';
+
+  const root = document.getElementById('wwk-root');
+  if (root) {
+    const strategy = document.getElementById('wwk-strategy') as HTMLSelectElement;
+    const autoBtn = document.getElementById('wwk-auto') as HTMLButtonElement;
+    const logEl = document.getElementById('wwk-log') as HTMLElement;
+    const counters = {
+      fired: document.getElementById('wwk-fired') as HTMLElement,
+      aborted: document.getElementById('wwk-aborted') as HTMLElement,
+      wasted: document.getElementById('wwk-wasted') as HTMLElement,
+      used: document.getElementById('wwk-used') as HTMLElement,
+    };
+
+    let stats = { fired: 0, aborted: 0, wasted: 0, used: 0 };
+    let latest = 0;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let inFlight: AbortController | undefined;
+
+    const paint = () => {
+      counters.fired.textContent = String(stats.fired);
+      counters.aborted.textContent = String(stats.aborted);
+      counters.wasted.textContent = String(stats.wasted);
+      counters.used.textContent = String(stats.used);
+    };
+
+    const log = (text: string) => {
+      const item = document.createElement('li');
+      item.textContent = text;
+      logEl.prepend(item);
+    };
+
+    async function fire(query: string) {
+      const id = ++latest;
+      stats.fired += 1;
+      paint();
+
+      if (strategy.value === 'both') {
+        inFlight?.abort();
+        inFlight = new AbortController();
+      }
+      const signal = strategy.value === 'both' ? inFlight?.signal : undefined;
+
+      try {
+        await fakeFetch(500, { jitter: 900, signal });
+        if (id === latest) {
+          stats.used += 1;
+          log(`q=${query} → answered, shown ✓`);
+        } else {
+          stats.wasted += 1;
+          log(`q=${query} → answered after a newer query… server worked for nothing`);
+        }
+      } catch {
+        stats.aborted += 1;
+        log(`q=${query} → aborted before the server finished`);
+      }
+      paint();
+    }
+
+    function keystroke(query: string) {
+      if (strategy.value === 'naive') {
+        void fire(query);
+        return;
+      }
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => void fire(query), 300);
+    }
+
+    autoBtn.onclick = async () => {
+      autoBtn.disabled = true;
+      let query = '';
+      for (const char of 'bangkok') {
+        query += char;
+        keystroke(query);
+        await wait(140);
+      }
+      autoBtn.disabled = false;
+    };
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      latest += 1;
+      clearTimeout(debounceTimer);
+      inFlight?.abort();
+      stats = { fired: 0, aborted: 0, wasted: 0, used: 0 };
+      logEl.innerHTML = '';
+      paint();
+    });
+
+    paint();
+  }
+</script>

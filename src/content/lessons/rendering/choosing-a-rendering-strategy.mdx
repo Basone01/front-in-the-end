@@ -1,0 +1,53 @@
+---
+title: Choosing a rendering strategy
+description: Content or app, stranger or regular, short session or long — three questions decide the rendering strategy. Fashion decides it more often, and that's why this lesson exists.
+track: rendering
+order: 5
+duration: 10 min
+---
+
+import DecisionTree from '../../../components/demos/DecisionTree.astro';
+
+Four lessons of history-as-argument, compressed into one paragraph: documents give you one copy of the truth and the browser's entire feature set for free, but can only update by reloading (lesson one). JavaScript can enhance a working document or replace it, and the replacement should be chosen, not defaulted into (lesson two). The SPA is that replacement at full scale — a real bargain for long, dense sessions and a structurally bad one for short or content-shaped visits (lesson three). SSR and hydration re-attach the document's strengths to the SPA at the price of rendering everything twice, a price that islands and server components exist to shrink (lesson four).
+
+Every technology in that paragraph was a rational response to a real wall. Which means the question "which one is best?" is malformed — like asking whether a truck is better than a sedan. The well-formed question is the one this final lesson builds a framework for: **what shape is your product, and which trade-offs does that shape tolerate?**
+
+## The three questions
+
+Almost the entire decision compresses into three product-shaped — not technology-shaped — questions.
+
+**1. Is this content or an app?** What does the user mostly do: *read things*, or *operate something*? Reading means the page's job is to arrive fast and get out of the way — document-side. Operating means accumulated client state across many interactions — app-side. Most real products are both, page by page: a storefront is content (catalog) wrapped around an app (checkout, configurator). That's fine — the answer is per-surface, not per-company, and "different rendering strategies for different routes" is a feature of every serious framework now.
+
+**2. Do strangers matter?** Anonymous arrivals from search and shared links consume HTML, judge you in the first second, and run your code on phones you've never tested. If they're the business — commerce, content, marketing — first paint and crawlability are non-negotiable, and architectures that ship empty husks are disqualified. Behind a login, the stranger constraints vanish, and with them most of the case against plain client rendering.
+
+**3. What shape is a session?** Long and dense amortizes any upfront cost — boot bundles, hydration, all of it (the lesson-three rule). Short and transactional amortizes nothing: every kilobyte is paid for by a user who's leaving in ninety seconds.
+
+Three questions, each with two answers — and honestly, by the time you've answered them, you usually don't need the tree. But here it is anyway, clickable:
+
+<DecisionTree />
+
+Run your current product through it. Then run the product your architecture was *actually designed for*, and see whether they're the same product. That gap — between what you're building and what your stack assumes you're building — is where most frontend performance problems are born, long before anyone writes slow code.
+
+## What the framework deliberately leaves out — and one thing it shouldn't
+
+Three honest caveats before you laminate the decision tree.
+
+**Your team is a real input.** A team of React experts shipping a slightly-overweight Next.js site will beat a team learning islands architecture under deadline. Boring-but-known legitimately wins ties — *ties*. What it doesn't win is structural mismatches: no amount of team familiarity makes a 400 KB boot appropriate for a checkout. Know which kind of decision you're looking at.
+
+**Migration costs are real.** The framework above prices greenfield decisions. Re-architecting a working product is priced in quarters, and "strangle it route by route — carve the most document-shaped pages out first" (lesson three's Monday advice) beats rewrites nearly every time.
+
+**The defaults are sticky on purpose.** Vendor frameworks default to their most powerful mode, conference talks showcase the new thing, and "we use X for everything" is organizationally cheaper than per-surface decisions. Choosing the *least* powerful strategy that fits is therefore a small act of organizational courage. Budget for the argument, not just the build.
+
+## The habit that outlives the answer
+
+This track used rendering to teach something more general, and it would be a shame to leave it implicit.
+
+Every layer of frontend technology exists because the layer beneath it hit a specific wall. That means every layer carries a *purpose* — a problem it solves — and a *price* — the free things it gave up. The engineering skill is not knowing the layers; the job market is drowning in people who know the layers. The skill is **matching the layer to the problem and refusing to pay for power you won't use** — and being able to say, out loud, in a planning meeting, exactly what the price of the shiny option is.
+
+That habit transfers. When you meet the next abstraction — a state manager, a data-fetching library, an AI-generated everything-framework — the questions are already in your hands: *what wall does this get me past? What was I getting for free that I'm now buying back?* If nobody in the room can answer, that's the answer.
+
+The next tracks apply the same habit inside the running app: where state should live and what "source of truth" buys you, and what the network does to your UI when requests finish out of order. Same method — feel the wall, then price the workaround.
+
+---
+
+**The takeaway:** content or app, strangers or regulars, short or long sessions — answer those per surface and the rendering strategy mostly chooses itself: static for the readable, sprinkles and islands for the lightly interactive, SPA for the lived-in, SSR + hydration only where strangers and statefulness collide. Use the least powerful strategy that fits, and when you reach for more power, be able to say what it costs. That sentence is this entire track.

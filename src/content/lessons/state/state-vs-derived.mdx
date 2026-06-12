@@ -1,0 +1,98 @@
+---
+title: "Store less: state vs derived state"
+description: Most of what we call state is a derivation wearing state's clothes. Every derivable value you store is a synchronization job you just hired yourself for.
+track: state
+order: 1
+duration: 10 min
+---
+
+import StoredVsDerived from '../../../components/demos/StoredVsDerived.astro';
+
+The rendering track was about where your UI gets built. This track is about something that causes more day-to-day bugs than any rendering decision ever will: **where your facts live, and how many copies of them exist.**
+
+Start with the sharpest version of the claim: **most of what sits in your components' state isn't state.** It's a value computed from state, stored as if it were state, by someone who didn't notice the difference. And every one of those stored derivations is a standing invitation for the most common bug in UI programming: two values that are supposed to agree, and don't.
+
+## The distinction
+
+A piece of data is **state** if it's a *fact you can't recompute* — the user typed it, clicked it, or the server sent it. The items in the cart. The text in the search box. Which tab the user picked.
+
+A piece of data is **derived** if it's a *consequence* — something a pure function could produce from state you already have. The cart's total. Whether the search box is empty. Whether the form is valid. The filtered list. The count of selected rows.
+
+The test takes one question: **"if I deleted this variable, could I rebuild it from the others?"** If yes, it's derived — and storing it means the original and the copy can now disagree.
+
+## Watch the disagreement happen
+
+Two carts. The left stores its total as a separate piece of state and updates it inside every event handler. The right computes it from the items. Add a few items, then remove some:
+
+<StoredVsDerived />
+
+The left cart's bug is worth dwelling on, because of *where it lives*. The add handler is correct. The remove handler is correct *about removing*. The bug isn't in any line of code you could point to — it's in the **contract between them**: "every code path that touches items must also update the total." That contract is invisible. It's not in the type system, not in the function signatures; it lives in the original author's head, and the teammate who added "remove last" six months later never saw it.
+
+Derived state has no contract to break. The total is a function of the items; there is no second value to forget. **You can't desynchronize what you never duplicated.**
+
+```js
+// A sync obligation in disguise:
+let items = [];
+let total = 0;        // ← must be touched by every code path, forever
+
+// The same fact, no obligation:
+let items = [];
+const total = () => items.reduce((sum, i) => sum + i.price, 0);
+```
+
+## "But computing it every time is wasteful"
+
+The objection arrives within minutes of teaching this, so let's deal with it.
+
+First: **deriving is almost always cheaper than you think.** A `reduce` over fifty cart items is nanoseconds. Filtering a thousand rows is microseconds. The UI work that follows — layout, paint — dwarfs it by orders of magnitude. The performance instinct here is usually borrowed from a different problem (server-side, big-O over millions of rows) and applied where it doesn't hold.
+
+Second, and more important: when derivation *does* get expensive, the answer is **memoization, not storage**. A memoized derivation — `useMemo` in React, `computed` in Vue, `$derived` in Svelte — is still a function of its inputs. It keeps the property that matters (it cannot disagree with its source) and adds caching as an optimization detail. Storing the value in state throws that property away to get the same cache.
+
+```jsx
+// Still derived. Still cannot drift. Just cached:
+const total = useMemo(
+  () => items.reduce((sum, i) => sum + i.price, 0),
+  [items]
+);
+```
+
+The frameworks are unanimous on this, which should tell you something: every modern one ships a first-class "derived value" primitive, and none of them ships a "keep these two states in sync" primitive — because the correct number of synchronized copies is zero.
+
+## The React-specific trap
+
+In React, the stored-derivation bug has a famous costume: **syncing state with `useEffect`**.
+
+```jsx
+// The costume:
+const [items, setItems] = useState([]);
+const [total, setTotal] = useState(0);
+
+useEffect(() => {
+  setTotal(items.reduce((sum, i) => sum + i.price, 0));
+}, [items]);
+```
+
+This *looks* responsible — it even handles the sync automatically! But look at what it actually does: renders with a stale total, then re-renders with the right one. Two renders, an intermediate frame where the UI disagrees with itself, and a dependency array standing guard over a value that never needed to exist. The React docs call this pattern out by name ("you might not need an effect"), and the fix is always the same deletion:
+
+```jsx
+const [items, setItems] = useState([]);
+const total = items.reduce((sum, i) => sum + i.price, 0); // just... during render
+```
+
+When you see `useEffect` + `setState` whose only job is keeping one state in step with another, you're looking at a stored derivation. Delete the state, compute during render, reach for `useMemo` only if the profiler tells you to.
+
+<div class="aside">
+
+**The honest exception.** Sometimes a derivation is genuinely too expensive to recompute (full-text indexing, layout of ten thousand nodes) *and* too awkward to memoize. Storing it is then a legitimate **cache** — but name it one, and treat it like one: it has an invalidation story, and lesson four is entirely about how caches go stale. The sin isn't storing; it's storing *casually*, without noticing you just took on cache-invalidation duty.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Audit one component.** List its state variables and ask the deletion question of each: "could I rebuild this from the others?" Most components are carrying at least one derivable value as state.
+2. **Treat `isX` booleans with suspicion.** `isEmpty`, `isValid`, `hasSelection`, `canSubmit` — these are almost always derivable, almost always stored, and the classic source of "the button is disabled but the form is full" bugs.
+3. **When you reach for `setState` inside `useEffect`, stop.** Nine times out of ten you're about to build the sync machine from the demo's left pane.
+
+---
+
+**The takeaway:** state is what you can't recompute; everything else is a derivation, and storing a derivation hires you for a synchronization job with invisible duties and no salary. Store the minimum, derive the rest, memoize only when measured. Next lesson: what happens when the *same* fact gets stored twice on purpose — and why "single source of truth" is a structural property, not a slogan.

@@ -1,0 +1,176 @@
+---
+// Async lesson 4 exhibit: pessimistic vs optimistic like buttons against the
+// same flaky server. The optimist answers instantly and occasionally has to
+// take it back — visibly, honestly.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the kind lie"
+  reset
+  caption="With failure at 30%, mash both buttons. The pessimist is honest and feels broken; the optimist feels instant and occasionally apologizes. The server count is the truth both must eventually agree with."
+>
+  <div id="opl-root">
+    <div class="controls">
+      <label>latency <input type="range" id="opl-lat" min="300" max="2500" step="100" value="1200" /></label>
+      <label>failure <output id="opl-failout">30</output>% <input type="range" id="opl-fail" min="0" max="80" step="10" value="30" /></label>
+      <span class="truth">server says: ❤️ <strong id="opl-server">12</strong></span>
+    </div>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome">pessimistic — wait for the server</div>
+        <div class="pane-screen center">
+          <button class="like" id="opl-pess" type="button">
+            ❤️ <span id="opl-pess-count">12</span> <span class="mini" id="opl-pess-status"></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">optimistic — answer now, reconcile later</div>
+        <div class="pane-screen center">
+          <button class="like" id="opl-opt" type="button">
+            ❤️ <span id="opl-opt-count">12</span>
+          </button>
+          <p class="toast" id="opl-toast" hidden>Couldn't save your like — undone.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .controls {
+    display: flex;
+    gap: 1.1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .controls label {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+
+  .truth {
+    margin-left: auto;
+    color: var(--ink-soft);
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+
+  .like {
+    font-size: 1.05rem !important;
+    padding: 0.5rem 1.2rem !important;
+  }
+
+  .like:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  .mini {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    opacity: 0.8;
+  }
+
+  .toast {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #c33;
+    border: 1px solid #c33;
+    border-radius: 4px;
+    padding: 0.25rem 0.6rem;
+    background: var(--bg);
+  }
+</style>
+
+<script>
+  import { fakeFetch } from '../../lib/fake-network';
+
+  const root = document.getElementById('opl-root');
+  if (root) {
+    const latInput = document.getElementById('opl-lat') as HTMLInputElement;
+    const failInput = document.getElementById('opl-fail') as HTMLInputElement;
+    const failOut = document.getElementById('opl-failout') as HTMLOutputElement;
+    failInput.addEventListener('input', () => (failOut.value = failInput.value));
+
+    const serverEl = document.getElementById('opl-server') as HTMLElement;
+    let server = 12;
+    const bumpServer = () => (serverEl.textContent = String(server));
+
+    const call = () =>
+      fakeFetch(Number(latInput.value), { failRate: Number(failInput.value) / 100 });
+
+    // --- Pessimistic -----------------------------------------------------
+    const pessBtn = document.getElementById('opl-pess') as HTMLButtonElement;
+    const pessCount = document.getElementById('opl-pess-count') as HTMLElement;
+    const pessStatus = document.getElementById('opl-pess-status') as HTMLElement;
+    let pessLikes = 12;
+
+    pessBtn.onclick = async () => {
+      pessBtn.disabled = true;
+      pessStatus.textContent = 'saving…';
+      try {
+        await call();
+        server += 1;
+        bumpServer();
+        pessLikes += 1;
+        pessCount.textContent = String(pessLikes);
+        pessStatus.textContent = '';
+      } catch {
+        pessStatus.textContent = 'failed';
+        setTimeout(() => (pessStatus.textContent = ''), 1200);
+      }
+      pessBtn.disabled = false;
+    };
+
+    // --- Optimistic ------------------------------------------------------
+    const optBtn = document.getElementById('opl-opt') as HTMLButtonElement;
+    const optCount = document.getElementById('opl-opt-count') as HTMLElement;
+    const toast = document.getElementById('opl-toast') as HTMLElement;
+    let optLikes = 12;
+
+    optBtn.onclick = async () => {
+      optLikes += 1; // answer the user immediately
+      optCount.textContent = String(optLikes);
+      try {
+        await call();
+        server += 1; // the lie comes true
+        bumpServer();
+      } catch {
+        optLikes -= 1; // roll back, and say so
+        optCount.textContent = String(optLikes);
+        toast.hidden = false;
+        setTimeout(() => (toast.hidden = true), 1800);
+      }
+    };
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      server = pessLikes = optLikes = 12;
+      bumpServer();
+      pessCount.textContent = optCount.textContent = '12';
+      pessStatus.textContent = '';
+      toast.hidden = true;
+      pessBtn.disabled = false;
+    });
+  }
+</script>

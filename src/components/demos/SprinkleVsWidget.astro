@@ -1,0 +1,198 @@
+---
+// Lesson 2 exhibit: the same signup feature built as (a) HTML enhanced by a
+// sprinkle of JS and (b) a JS-owned widget — with a switch that makes the
+// JavaScript "fail to load".
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: who owns the feature?"
+  reset
+  caption="Yes, this simulation is itself JavaScript — it's playing the role of the browser. The point stands: the sprinkle degrades, the widget disappears."
+>
+  <div class="svw" id="svw-root">
+    <label class="js-switch">
+      <input type="checkbox" id="svw-js" checked />
+      JavaScript loads successfully
+    </label>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome">HTML first, JS enhances</div>
+        <div class="pane-screen">
+          <form class="sub" id="svw-sprinkle-form">
+            <label for="svw-email-a">Get the newsletter</label>
+            <div class="line">
+              <input type="email" id="svw-email-a" name="email" placeholder="you@example.com" required />
+              <button type="submit">Subscribe</button>
+            </div>
+            <p class="hint" id="svw-hint" hidden></p>
+            <p class="result" id="svw-result-a" hidden></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">JS renders everything</div>
+        <div class="pane-screen">
+          <div id="svw-widget-mount"><!-- <div id="root"></div> --></div>
+          <p class="dead" id="svw-dead" hidden>
+            The page shipped <code>&lt;div id="root"&gt;&lt;/div&gt;</code> and a script tag.
+            The script never arrived. This is the whole page.
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .js-switch {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.88rem;
+    font-family: var(--font-mono);
+    margin-bottom: 0.9rem;
+    cursor: pointer;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .svw :global(.sub label) {
+    display: block;
+    font-weight: 640;
+    margin-bottom: 0.4rem;
+  }
+
+  .svw :global(.line) {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .svw :global(.line input) {
+    flex: 1;
+    min-width: 9rem;
+  }
+
+  .svw :global(.hint) {
+    font-size: 0.78rem;
+    margin: 0.4rem 0 0;
+    color: var(--ink-soft);
+  }
+
+  .svw :global(.hint.ok) {
+    color: var(--ok);
+  }
+
+  .svw :global(.result) {
+    font-size: 0.82rem;
+    margin: 0.5rem 0 0;
+    color: var(--ok);
+  }
+
+  .svw :global(.result.reload) {
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+  }
+
+  .dead {
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  const root = document.getElementById('svw-root');
+  if (root) {
+    const jsSwitch = document.getElementById('svw-js') as HTMLInputElement;
+    const sprinkleForm = document.getElementById('svw-sprinkle-form') as HTMLFormElement;
+    const emailA = document.getElementById('svw-email-a') as HTMLInputElement;
+    const hint = document.getElementById('svw-hint') as HTMLParagraphElement;
+    const resultA = document.getElementById('svw-result-a') as HTMLParagraphElement;
+    const mount = document.getElementById('svw-widget-mount') as HTMLDivElement;
+    const dead = document.getElementById('svw-dead') as HTMLParagraphElement;
+
+    const jsOn = () => jsSwitch.checked;
+
+    // --- Left pane: the sprinkle ---------------------------------------
+    emailA.addEventListener('input', () => {
+      if (!jsOn()) return;
+      hint.hidden = emailA.value.length === 0;
+      const ok = emailA.checkValidity() && emailA.value.includes('.');
+      hint.textContent = ok ? '✓ looks like an email' : 'keep typing — needs an @ and a domain';
+      hint.classList.toggle('ok', ok);
+    });
+
+    sprinkleForm.addEventListener('submit', (event) => {
+      event.preventDefault(); // the demo harness, standing in for the network
+      if (!emailA.reportValidity()) return;
+      resultA.hidden = false;
+      if (jsOn()) {
+        resultA.className = 'result';
+        resultA.textContent = '✓ Subscribed — handled in place, no reload.';
+      } else {
+        // No JS on the page: the browser still submits the form. Simulate
+        // the full-page round trip.
+        const screen = sprinkleForm.closest('.pane-screen') as HTMLElement;
+        screen.classList.add('is-blank');
+        setTimeout(() => {
+          screen.classList.remove('is-blank');
+          resultA.className = 'result reload';
+          resultA.textContent = 'POST /subscribe → 303 → GET /thanks (full page load) ✓';
+        }, 450);
+      }
+    });
+
+    // --- Right pane: the widget ----------------------------------------
+    function renderWidget() {
+      mount.innerHTML = `
+        <form class="sub">
+          <label>Get the newsletter</label>
+          <div class="line">
+            <input type="email" name="email" placeholder="you@example.com" required />
+            <button type="submit">Subscribe</button>
+          </div>
+          <p class="result" hidden></p>
+        </form>`;
+      const form = mount.querySelector('form') as HTMLFormElement;
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const result = form.querySelector('.result') as HTMLParagraphElement;
+        result.hidden = false;
+        result.textContent = '✓ Subscribed — handled in place, no reload.';
+      });
+    }
+
+    function applyJsState() {
+      if (jsOn()) {
+        renderWidget();
+        dead.hidden = true;
+        hint.hidden = emailA.value.length === 0;
+      } else {
+        mount.innerHTML = '';
+        dead.hidden = false;
+        hint.hidden = true;
+      }
+    }
+
+    jsSwitch.addEventListener('change', applyJsState);
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      jsSwitch.checked = true;
+      emailA.value = '';
+      resultA.hidden = true;
+      hint.hidden = true;
+      applyJsState();
+    });
+
+    applyJsState();
+  }
+</script>

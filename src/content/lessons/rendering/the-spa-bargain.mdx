@@ -1,0 +1,77 @@
+---
+title: The SPA bargain
+description: A single-page app trades the browser's free features for control. The trade is real and sometimes excellent — but the bill is itemized, and most teams never read it.
+track: rendering
+order: 3
+duration: 13 min
+---
+
+import MpaVsSpa from '../../../components/demos/MpaVsSpa.astro';
+
+By the early 2010s, the sprinkle world had a real problem. Gmail, Google Maps, Trello — products whose sessions lasted hours and whose interfaces changed dozens of times a minute — had outgrown "HTML plus event listeners". Coordinating rich state through the DOM was failing at scale, jQuery spaghetti was a hiring meme, and the full-page reload felt absurd inside an app you never left.
+
+The single-page application was a coherent answer: **load the application once, then never navigate again.** The server stops sending pages and starts sending JSON; JavaScript owns the DOM permanently; "navigation" becomes the app repainting itself. The router, the views, the state — all client-side.
+
+This lesson's claim: the SPA is a *bargain* in the older sense of the word — a negotiated exchange. You receive something genuinely valuable. You pay with the browser features your users didn't know they were getting for free. Whether it's a good bargain depends entirely on your product's shape, and almost nobody prices it before signing.
+
+## What you receive
+
+Be fair to the SPA, because the caricature ("bloated nonsense for a blog") obscures why it won a decade:
+
+- **Statefulness across interactions.** Client state persists across "pages" — the filter panel stays put, the music keeps playing, the half-typed comment survives. This is the killer feature, and the document model simply cannot do it.
+- **Interaction density.** When state is in memory, an interaction costs a function call, not a round trip. Drag-and-drop, live collaboration, sixty-updates-a-second UIs become natural.
+- **One mental model.** The entire UI is one program in one language with one component tree. Genuinely easier to reason about than templates-here, sprinkles-there — this, more than performance, is why developers chose it.
+- **In-place transitions.** The shell persists; content morphs. No flash of white, no rebuilt scroll position. (Hold this thought, because you pay for it elsewhere.)
+
+## The itemized bill
+
+Here is what the browser was doing for free, which is now your engineering team's job:
+
+**Navigation itself.** Routing, the back button, scroll restoration, focus moving to new content for screen readers, "open in new tab", URL-as-shareable-state — your router approximates each one in JavaScript. Approximates: every SPA codebase eventually contains a scroll-restoration bug, and most contain an accessibility one, because the browser's versions of these took two decades to harden.
+
+**The loading state.** An MPA has one loading state and the browser draws it (the spinner in the tab — users have understood it since 1994). A SPA has *n* loading states, where *n* is the number of things that fetch — and every one is UI you must design, build, and sequence. The discipline of loading states gets its own lesson in the async track; here, just notice the SPA invented the problem.
+
+**First load.** The document model's fastest moment — arrive, receive HTML, read — becomes the SPA's slowest: arrive, receive nothing, download the app, boot it, fetch data, *then* read. You'll feel this in the demo below.
+
+**Memory and time.** A document's "garbage collection" is navigation: everything is destroyed and rebuilt fresh. A SPA runs for hours; every leaked subscription and forgotten listener accumulates. Long-lived client programs need the discipline of desktop apps, which is precisely the discipline web teams historically didn't need.
+
+**Crawlers and previews.** Anything that reads HTML without executing JavaScript — search engines (unreliably-executing at best), link unfurlers, RSS readers — sees the husk.
+
+None of these is fatal. Each is solvable, and mature SPA teams solve them. The point is that each solution is *work, forever* — a standing tax paid in engineering time — and the bargain only makes sense if the statefulness you bought is worth more than the tax.
+
+## Feel both sides
+
+The same three-page site, twice. The MPA fetches a document per click; the SPA downloads itself once, then fetches JSON. Try a few navigations at the default latency, then drag it up and try again:
+
+<MpaVsSpa />
+
+Notice three things. First, the SPA's brutal first load — that blank pane is your user's first impression. Second, how *good* SPA navigation feels after boot, especially at high latency: the shell holding still while content swaps is real value, not vibes. Third, the MPA's white flash on every click — tolerable at low latency, miserable at high. Neither side wins everywhere; the slider just moves the crossover point.
+
+## The amortization rule
+
+So when is the bargain good? Strip away the discourse and it's an amortization problem:
+
+**The SPA's costs are front-loaded (boot) and structural (the tax). Its benefits are per-interaction. The bargain pays off when there are enough interactions per session to amortize the costs.**
+
+- A **dashboard** someone operates for three hours: thousands of interactions amortizing one boot. Excellent bargain.
+- A **design tool, an email client, a CRM**: the user lives there; client state across interactions is the product. Excellent bargain.
+- A **checkout**: five interactions, then gone — and you made the user download an application to fill in four fields. Terrible bargain.
+- A **content site**: one interaction (arrive, read) is the whole session. You paid the boot cost to deliver what a static file delivers faster. Worst bargain on the menu, and for a decade the industry's default anyway.
+
+The corollary deserves its own line: **"behind a login" changes the math.** Public, search-driven, first-impression-critical surfaces are where SPA costs concentrate (first paint, SEO, strangers on slow networks). Logged-in surfaces are where they evaporate — the user already chose you, the crawler isn't invited, and the session is long. This is why "SPA for the app, documents for everything public" has quietly become the grown-up default at companies that have been burned.
+
+<div class="aside">
+
+**"But my SPA framework does SSR now."** Yes — and that's not a rebuttal of the bill, it's the industry's attempt to pay it, by gluing the document's strengths back onto the SPA. It works, mostly, at the cost of one of the strangest mechanisms in frontend: rendering everything twice and hoping both renders agree. That's the next lesson.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Price new surfaces with the amortization rule.** Interactions per session, public vs logged-in, stranger-sensitivity. Ten minutes of this beats a quarter of performance retrofitting.
+2. **If you're inside a SPA, audit which routes are actually app-shaped.** Most SPAs contain a few document-shaped pages (pricing, blog, help) paying full app tax. Carving them out is usually cheap and immediately measurable.
+3. **Watch your real first-load numbers** — on a mid-range Android over 4G, not your laptop. The bill is invisible from the dev machine, which is how it goes unpaid until a quarterly OKR panic.
+
+---
+
+**The takeaway:** the SPA exchanges the browser's free features for statefulness and interaction density. It's a genuinely good trade for long, dense, logged-in sessions, and a structurally bad one for short or content-shaped visits — and the only way to know which you have is to count interactions, not fashion points. Next lesson: the industry's attempt to have both sides of the trade at once — server-side rendering, hydration, and the strange tax of rendering everything twice.

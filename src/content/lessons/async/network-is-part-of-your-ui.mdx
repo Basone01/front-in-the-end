@@ -1,0 +1,86 @@
+---
+title: The network is part of your UI
+description: Every fetch puts your interface into one of four states, whether you designed them or not. The ones you didn't design are the ones your users meet at the worst time.
+track: async
+order: 1
+duration: 10 min
+---
+
+import FetchStates from '../../../components/demos/FetchStates.astro';
+
+The state track ended with truth that lives on the server. This track is about the road between here and there — because that road is slow, unordered, and unreliable, and **your UI is standing on it**.
+
+Start with the mindset shift the whole track hangs on. On your machine, against localhost, a fetch is a formality: data is there in twelve milliseconds, every time. So the interface you naturally build is the interface for *that* network. But your users run your frontend on hotel wifi, on the BTS underground between stations, on a phone with one bar — and on their network, the fetch is not a formality. It's an **event with a duration and an uncertain outcome**, and during that duration your UI is showing *something*. The question is whether you chose what.
+
+The claim: **a fetch is a state machine with four states — idle, loading, success, error — and your UI renders all four whether you wrote them or not.** Skip one in code and it doesn't disappear; it just renders as whatever your markup happens to do when the data isn't there. Blank space. A spinner that never stops. Yesterday's data wearing today's timestamp. The states you don't design are still shipped — just undesigned.
+
+## Watch the missing states render
+
+Two components fetch the same forecast. The left one was written against localhost: fire the request, set the data. The right one admits the machine exists. Set failure to 50% and load a few times:
+
+<FetchStates />
+
+The optimist's failure mode deserves a close look because of how *quiet* it is. No exception reaches the console — the promise rejected and nobody was listening. No error UI appears — none was written. The component simply… stays blank, forever, with no retry and no explanation. The user's interpretation is not "a request failed"; it's "this app is broken." And your monitoring sees nothing, because nothing crashed.
+
+That's the anatomy of most "it doesn't work sometimes" tickets: not a bug in the happy path, but **an unhandled state rendering as accidental UI**.
+
+## The machine, written down
+
+The honest version costs little. In vanilla terms:
+
+```js
+let state = { status: 'idle', data: null, error: null };
+
+async function load() {
+  state = { status: 'loading', data: state.data, error: null };
+  render();
+  try {
+    const data = await fetchForecast();
+    state = { status: 'success', data, error: null };
+  } catch (error) {
+    state = { status: 'error', data: state.data, error };
+  }
+  render();
+}
+```
+
+Note the deliberate detail: `loading` and `error` *keep the previous data*. That's what lets you render "stale content with a quiet refreshing indicator" instead of bulldozing the page to a spinner on every refetch — the difference between an app that flickers and one that feels settled. The status field, not the presence of data, drives the UI:
+
+```jsx
+if (status === 'loading' && !data) return <Skeleton />;
+if (status === 'error')            return <ErrorPane onRetry={load} error={error} />;
+return (
+  <>
+    {status === 'loading' && <RefreshingDot />}
+    <Forecast data={data} />
+  </>
+);
+```
+
+In React-at-work terms, this machine is exactly what a query library hands you — `isPending`, `isError`, `data`, plus the keep-previous-data behavior — which is why the async track and the state track converge on the same library category from different directions. The library doesn't absolve you of the states, though. It *surfaces* them; you still have to render all four. `isError` ignored is the optimist with extra steps.
+
+## Designing the states, not just handling them
+
+Handling is the floor. The states are also a design surface, with craft to them:
+
+**Loading** is a promise about the future — its job is shape, not entertainment. A skeleton mirroring the coming layout beats a centered spinner because it prevents the layout *lurch* when content lands. And respect the two thresholds: under ~150ms, show nothing (a flash of spinner makes fast feel slow); past ~10 seconds, a bare spinner becomes a hostage situation — say something ("still trying…", a cancel).
+
+**Error** is a conversation, not a confession. "Error: NetworkError" is the server talking to itself in front of guests. The user needs three things: what happened in their terms ("Couldn't load your orders"), whether their stuff is safe (usually yes — say so when it matters), and what to do next — which almost always means **a retry button**. Retry-able errors are the difference between "it broke" and "it hiccuped."
+
+**Idle** is real on anything user-initiated (search not yet searched, report not yet run) — design the invitation, not a void. **Success** has its own dark corner: the *empty* success. Zero results is not an error and not blank space; it's a state with its own message ("No orders yet — when you place one, it lands here").
+
+<div class="aside">
+
+**Why this lesson is first.** Everything else in this track — races, cancellation, optimistic updates — is a complication *of these four states*. A race condition is two machines fighting over `success`. Optimistic UI is choosing to render `success` early and budgeting for a retreat. If the four states aren't explicit in your code, the later techniques have nothing to attach to. This is the load-bearing lesson; the spectacular ones are next.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Pick your app's most important fetch and audit it for all four states.** Kill the network in devtools (Offline mode) and look at what actually renders. That accidental UI is what your worst-connected users see most.
+2. **Throttle yourself once a week.** Devtools → Network → "Slow 4G". Five minutes of using your own app on the network your users have will fix your instincts faster than any guideline.
+3. **Give every error state a retry.** It's one button, and it converts a dead end into a hiccup — the single highest-leverage line in async UI.
+
+---
+
+**The takeaway:** the network's latency and failures are states of your interface — four of them, shipped whether designed or not, and the undesigned ones render as blankness and lies. Make the machine explicit, keep stale data on screen during transitions, and give errors a retry. Next lesson: what happens when *several* of these machines run at once and finish in the wrong order — the race condition, frontend's most reproducible "unreproducible" bug.

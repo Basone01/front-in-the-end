@@ -1,0 +1,71 @@
+---
+title: Designing the state of a feature
+description: State design is four questions asked per fact — is it state, who owns it, where does it live, is it ours or a snapshot. Run the drill until it's boring; boring is the goal.
+track: state
+order: 5
+duration: 10 min
+---
+
+import StateQuiz from '../../../components/demos/StateQuiz.astro';
+
+Four lessons, four tools. Store facts, derive consequences (lesson one). Give each fact exactly one home (lesson two). Choose the home by lifetime and reach — and give the URL what's URL-shaped (lesson three). Treat anything from the server as a managed, invalidated cache (lesson four).
+
+This closing lesson does what the rendering track's closer did: compresses the toolkit into a drill you can run in a planning meeting, then makes you run it.
+
+## The four questions, per fact
+
+When a feature lands on your desk, before any component is written, list the facts it involves and ask each one:
+
+**1. Is this actually state?** Or can it be computed from facts already on the list? Strike the derivables — `isValid`, the filtered list, the count, the total. The list always shrinks, and every strike is a future sync bug deleted in advance.
+
+**2. Is it ours, or a snapshot of the server's?** Split the survivors into two piles, because they're managed by different machinery: client truth (the user is mid-typing it, mid-choosing it) versus server truth photographed (anything fetched, anything saved). The second pile goes to the cache layer; it never touches `useState`.
+
+**3. Where does the client truth live?** Run the ladder with the two principles — as close as possible, as durable as required — and the bookmark test for the URL's share.
+
+**4. Who writes it?** One owner per fact; everyone else reads and requests. If two components both feel entitled to write, you've usually mis-picked the fact — there's a single deeper fact (often "in the URL" or "in the cache") that both should defer to.
+
+That's the whole method. Watch it chew through a real feature.
+
+## Worked example: a searchable, editable team page
+
+The brief: a page listing your team's members; search-as-you-type filters them; clicking one opens an editable profile drawer; edits save to the server. A junior takes this brief and produces nine `useState`s. The drill produces this instead:
+
+| Fact | Verdict | Home |
+|---|---|---|
+| The search text | state, client truth, shareable | **URL** (`?q=`) |
+| The filtered member list | *derived* (members + query) | — computed |
+| Which member's drawer is open | state, client truth, shareable | **URL** (`/team/42`) |
+| The members themselves | server truth | **cache** (`['team']`) |
+| The drawer's edited fields | state, client truth — a *draft* | **component**, named `draft`, reconciled on save |
+| "Is the save in flight" | derived from the mutation | — the cache layer's status |
+| Hover/focus highlights | state, ephemeral | **DOM/component** |
+
+Nine candidate states became three real ones (query, open id, draft) — and two of those live in the URL, so the component tree owns exactly one fact: the draft, the one thing genuinely private to this user, this session, this drawer. Refresh works. Sharing works. Saving invalidates `['team']`, so the list updates without knowing the drawer exists. The feature is mostly *plumbing-free* because almost nothing needed plumbing.
+
+That's the pattern worth internalizing: **a good state design feels like the feature got simpler than the brief.** When a design produces more state than facts, something on the list is derivable, duplicated, or misplaced.
+
+## Now you
+
+Six pieces of state, four possible homes. The answer key argues back:
+
+<StateQuiz />
+
+If you disagreed with a verdict *and could say why in the ladder's vocabulary* — lifetime, reach, shareability, ownership — then this track has done its job. The vocabulary is the deliverable. "It should be in the URL because support needs to send these links" wins planning arguments that "I think it's cleaner" loses.
+
+## Three smells worth memorizing
+
+For the days when you don't run the full drill, the shortlist that catches most state-design rot in review:
+
+1. **An effect that copies one state into another.** A sync machine. Something is duplicated or derivable — find it.
+2. **Filters, tabs, or selection that a refresh forgets.** URL-shaped state in component housing.
+3. **`fetch` feeding `useState`.** A private, invalidation-proof photograph of the database. The header-greets-the-old-name bug is already in the codebase; it just hasn't been reported yet.
+
+<div class="aside">
+
+**What this track skipped, on purpose.** Reducers and state machines (how to structure *transitions* once facts have homes), normalization of relational client data, and real-time sync are all real topics — and all of them sit on top of this track's foundation, not beside it. A state machine over duplicated facts is a very organized way to be wrong. Foundations first; the fancy stuff composes.
+
+</div>
+
+---
+
+**The takeaway:** four questions per fact — real state or derived? ours or the server's? which rung of the ladder? who writes it? — turn state design from vibes into a drill, and the drill turns most features into less state than the brief implied. Next track: the async one — because we spent five lessons deciding where truth lives, and it's time to deal with the fact that it arrives late, out of order, and sometimes not at all.

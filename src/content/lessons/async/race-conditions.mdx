@@ -1,0 +1,88 @@
+---
+title: "Race conditions: out of order is the order"
+description: The network reorders your responses and your UI applies them as they arrive. The fix is one rule — never trust arrival order — and one integer that enforces it.
+track: async
+order: 2
+duration: 12 min
+---
+
+import TypeaheadRace from '../../../components/demos/TypeaheadRace.astro';
+
+Here is a bug report you have received, or will: *"Sometimes the search shows results for something I'm not searching anymore. Can't reproduce reliably. Low priority I guess?"* It is not low priority. It's the most classic race condition in frontend, it's in essentially every codebase that fetches on keystroke without defending against it, and it is — this is the part that should bother you — **completely deterministic once you see the mechanism.** Nothing about it is random except your network's mood.
+
+The claim: **HTTP gives you no ordering guarantee across requests, but naive UI code contains a hidden assumption that responses arrive in the order requests were sent.** The bug isn't in any line; it's in the gap between those two facts. And the fix is not "be careful" — it's a one-integer protocol that makes stale responses structurally harmless.
+
+## The mechanism, slowed down
+
+User types `bangkok`, fast. Each keystroke fires a search:
+
+- `t+0ms` — request for **"b"** departs. "b" matches half the database; the query is slow.
+- `t+140ms` — request for **"ba"** departs.
+- …
+- `t+840ms` — request for **"bangkok"** departs. One row. The server answers instantly.
+- `t+1100ms` — **"bangkok"**'s response lands. UI shows the right city. 
+- `t+1900ms` — **"b"**'s response *finally* lands. The handler does what it was written to do: `results = response`. The UI now confidently displays fifteen cities starting with B, under a search box that says "bangkok".
+
+Every response handler ran correctly. The composition is wrong — because `last write wins`, and the network, not the user, chose who wrote last. Note the cruel detail: **the shorter the query, the heavier the search, the slower the response** — so the stale-overwrites-fresh ordering isn't even unlikely. The bug is biased toward happening.
+
+Watch it, and then watch the fix — toggle the guard and run auto-type again:
+
+<TypeaheadRace />
+
+## The fix is an integer
+
+You cannot make the network ordered. You can make your UI stop *believing* it's ordered. The minimal protocol: stamp each request with a sequence number, and let a response write to the UI only if it's the latest one.
+
+```js
+let latest = 0;
+
+async function search(query) {
+  const id = ++latest;            // stamp this request
+  const results = await fetchResults(query);
+  if (id !== latest) return;      // a newer request exists; this response is history
+  render(results);
+}
+```
+
+Three lines of defense. The closure captures `id` at departure; by arrival, `latest` may have moved on, and the stale response — which was a perfectly good answer *to a question nobody is asking anymore* — gets dropped on the floor where it belongs. This pattern has many names (sequence token, request generation, "ignore stale responses"); the demos on this site use it internally, because reset-during-flight is the same race in a different costume.
+
+In React, the same idea wears effect-cleanup clothing — the cleanup runs when a new effect supersedes the old, which is exactly "a newer request exists":
+
+```jsx
+useEffect(() => {
+  let current = true;
+  fetchResults(query).then((results) => {
+    if (current) setResults(results);
+  });
+  return () => { current = false; };
+}, [query]);
+```
+
+Same integer, spelled as a boolean per request. (And the third spelling, `AbortController` — which doesn't just ignore the stale response but cancels the work — is the next lesson; cancellation earns its own treatment because it pays the server back, not just the UI.)
+
+## Seeing the shape everywhere
+
+Typeahead is the canonical case, but the *shape* — **multiple in-flight operations, one shared destination, last-arrival-wins** — wears many outfits. Train the pattern-matcher:
+
+- **Tab switching.** User clicks Orders, then Settings. The Orders fetch limps in late and paints order data into the Settings screen. Same shape: the "destination" is the page body, and two requests both think they own it.
+- **Filter panels and pagination.** Click page 2, click page 3. Page 2 arrives last. You're reading page 2 labeled as page 3.
+- **Save then load.** Auto-save fires; user navigates; the loaded data arrives, then the save's response handler "helpfully" re-applies the pre-navigation state.
+- **The same race, write-side.** Two quick toggles of a setting fire PUT true, PUT false. They can be *applied by the server* out of order too — client guards don't fix server-side ordering; that needs versioning or idempotency, which lesson five touches.
+
+The test for whether a surface needs the guard is one question: **can a new request depart while an old one is in flight, aimed at the same piece of UI?** If yes, you have a race; the only variable is how often the network shuffles the deck. "It's fast in production" means "the deck is rarely shuffled," not "the bug isn't there."
+
+<div class="aside">
+
+**Where the libraries stand.** This is another bug class that query libraries quietly delete: keyed queries mean a response for `['search', 'b']` *cannot* write into `['search', 'bangkok']` — the destination is part of the key, so "shared destination" stops being shared. If you're on TanStack Query and fetching per keystroke through it, you've had the guard all along. The reason to learn the integer anyway: the moment you fetch outside the library — a raw effect, a websocket handler, an event listener — you're back on the unguarded road, and you need to recognize the shape on sight.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Grep for fetch-inside-effect with a state-set in the `.then`.** Each one without a cleanup/guard is the bug, pre-installed. Add the boolean; it's four lines.
+2. **Reproduce one race on purpose.** Devtools throttling + fast typing, or a `setTimeout(resolve, Math.random() * 3000)` wrapper in dev. A race you've *seen* is a race you'll never again dismiss as "can't reproduce".
+3. **When reviewing async code, ask the one question** — "what happens if these resolve in the opposite order?" — out loud, in the PR. It finds bugs at the cheapest possible moment, and it teaches the shape to the whole team.
+
+---
+
+**The takeaway:** the network reorders responses and naive handlers apply them in arrival order — so stamp requests, drop stale arrivals, and stop trusting any ordering you didn't enforce. The guard discards the stale answer after paying for it, though; next lesson is about not paying at all — cancellation, debounce, and the budget of work your keystrokes silently spend.

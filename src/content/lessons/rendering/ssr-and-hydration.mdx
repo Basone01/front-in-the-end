@@ -1,0 +1,76 @@
+---
+title: "SSR & hydration: the pendulum swings back"
+description: Server-side rendering bolts the document's strengths back onto the SPA — at the price of rendering everything twice. Hydration isn't a feature; it's the bill for wanting both worlds.
+track: rendering
+order: 4
+duration: 13 min
+---
+
+import FirstPaintRace from '../../../components/demos/FirstPaintRace.astro';
+
+The SPA bargain left a specific casualty: the stranger. The person arriving from a search result, on a phone, on transit wifi, who receives an empty `<div>` and a 480 KB homework assignment. For logged-in tools nobody cared. Then SPAs became the default for *everything* — storefronts, news sites, landing pages — and the casualty started showing up in revenue dashboards.
+
+The industry's answer: **render the app on the server too.** Run the same components in Node, produce real HTML, send it. The stranger sees content immediately — document-fast — and *then* the JavaScript arrives and takes over, SPA-smooth. Both worlds. The pendulum, having swung from server-rendered documents to client-rendered apps, swings back toward the middle.
+
+This lesson's claim: SSR genuinely works — it's the right call for a huge class of products — but **hydration, the mechanism that makes it work, is not a feature. It's the bill.** Understanding it as a bill, rather than as magic, is what lets you decide when it's worth paying.
+
+## Rendering twice
+
+The mechanism, stripped to its skeleton:
+
+1. **Server:** run the components with the data. Produce HTML. Send it.
+2. **Browser:** paint that HTML immediately. The user sees a complete page.
+3. **Browser:** download the JavaScript bundle — which contains *the same components*.
+4. **Hydration:** run the components *again* in the browser, producing a virtual result that should match the HTML already on screen. Don't repaint — instead, walk the existing DOM and attach event handlers to it, adopting it as the app's own.
+5. From here on: a normal SPA.
+
+Read step 4 again, because it's the strangest mechanism in mainstream frontend: the client re-derives, from scratch, a result the server already computed — not to display it (it's already displayed), but to *reconstruct the in-memory state a SPA would have had* if it had rendered the page itself. The work is duplicated by design. "Hydration" sounds like sprinkling water on something; the reality is closer to rebuilding the ship's engine while passengers are already aboard.
+
+Two consequences fall straight out of the mechanism.
+
+## Consequence one: the uncanny valley
+
+Between step 2 (content visible) and step 4 (handlers attached) there is a window where **the page looks done and is lying about it**. Buttons render, look enabled, and do nothing. The faster your server and the slower the network or CPU, the wider the window.
+
+Don't take my word for it — race them. Load both panes, then try to click "cheer" the moment you can see it:
+
+<FirstPaintRace />
+
+The CSR pane is honest: blank until it's fully ready, then everything works. The SSR pane paints dramatically earlier — that's the entire point, and at high latency it's not subtle — but try the button during "painted" and you get the valley: visible, dead. Most real pages cross the valley before a user's first click. The ones that don't produce the most user-hostile failure on the modern web: the tap that silently does nothing, with no spinner, no error, no clue.
+
+## Consequence two: you ship everything twice
+
+The component code must exist on the server (to render HTML) *and* in the bundle (to hydrate). SSR didn't shrink the SPA's JavaScript bill — it added a server render in front of it. First *paint* improves enormously; time to *interactive* improves barely, or not at all. If your problem was "users wait too long to see content", SSR solves it. If your problem was "we ship too much JavaScript", SSR is a way of feeling better about it.
+
+There's also a new failure mode as a bonus: the **hydration mismatch**. If the client render disagrees with the server's HTML — a timestamp formatted in a different timezone, a `Math.random()`, anything reading `window` during render — the framework must reconcile two versions of reality, with consequences from console warnings to subtly corrupted UI. Rendering twice means *agreeing* twice, and components must now be written to render identically in two environments. That discipline is a tax on every component you write, whether or not it ever misbehaves.
+
+<div class="aside">
+
+**Terminology check.** SSR (render per-request on a server), SSG (render at build time — what this site does), and ISR (render on demand, then cache) differ in *when* the HTML is produced. Hydration is orthogonal: it's about what happens *after* the HTML arrives, and its bill is the same in all three. A statically generated page that hydrates a full app pays full hydration tax from a free CDN.
+
+</div>
+
+## Shrinking the bill: islands and server components
+
+If hydration's cost is proportional to how much of the page hydrates, the obvious move is: hydrate less. The last five years of framework innovation are mostly this sentence.
+
+**Islands** (Astro, Fresh, Eleventy + isolated components): the page is static HTML except for declared interactive regions, each hydrating independently. The carousel is an island; the article around it ships no JavaScript at all. This page is doing exactly that — the demo above is an island; the prose you're reading never hydrates. The mental model is lesson two's ownership line, drawn per-component: the document owns the page; JavaScript owns its islands.
+
+**React Server Components** draw the same line inside the component tree: server components run *only* on the server — their code never enters the bundle, they can touch the database directly, and they re-render by asking the server — while client components hydrate as usual. RSC is React conceding the premise of this whole track: most of a typical page never needed to be a client application.
+
+The pendulum, in other words, is not swinging back and forth anymore. It's converging — on partial, deliberate, per-component hydration. The "documents vs apps" war ends in a boundary negotiation, and the engineers who can draw that boundary well are the ones this track is trying to produce.
+
+## When to pay the SSR bill
+
+The decision rule is shorter than its reputation suggests. SSR + hydration earns its complexity when **both** of these are true:
+
+1. **Strangers matter** — public, search-driven, link-shared, first-paint-critical surfaces.
+2. **The page genuinely needs app-grade interactivity after paint** — not a nav menu and a form (sprinkles and islands cover that for a fraction of the cost), but real client statefulness, the lesson-three kind.
+
+E-commerce product pages are the canonical both-true case: SEO is the business, and the page is dense with stateful UI. A logged-in dashboard fails condition 1 — plain CSR is simpler and nobody's harmed. A blog fails condition 2 — static HTML with maybe an island, and skip the framework runtime entirely.
+
+And if you do pay the bill, **design for the valley**: server-render real `<form>`s and `<a>`s so the pre-hydration page degrades to working document behavior (lesson two, again) instead of to dead pixels. The valley is survivable; the silent dead tap is not.
+
+---
+
+**The takeaway:** SSR re-attaches the document's superpower — content in the first response — to the SPA, and hydration is the awkward, double-rendered price. Pay it when strangers and statefulness coincide; shrink it with islands or server components when they don't; and never mistake "painted" for "done" — your users certainly don't. Final lesson of the track: folding all four lessons into the one decision that actually ships — choosing a rendering strategy on purpose.

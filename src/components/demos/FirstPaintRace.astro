@@ -1,0 +1,230 @@
+---
+// Lesson 4 exhibit: CSR and SSR load the same page side by side. SSR paints
+// far earlier but goes through the uncanny valley — painted, not interactive.
+// The cheer button is clickable the moment you can see it; whether it *does*
+// anything is the whole lesson.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the first-paint race"
+  reset
+  caption="Press load, then try to click “cheer” in both panes as soon as you see it. On the SSR side there's a window where the page looks done but the button is dead — the uncanny valley of hydration."
+>
+  <div id="fpr-root">
+    <div class="controls">
+      <button id="fpr-load">load both pages</button>
+      <label class="latency">
+        network latency: <output id="fpr-ms">700</output>ms
+        <input type="range" id="fpr-latency" min="150" max="2500" step="50" value="700" />
+      </label>
+    </div>
+
+    <div class="cols">
+      {
+        ['csr', 'ssr'].map((kind) => (
+          <section class="pane">
+            <div class="pane-chrome">
+              {kind === 'csr' ? 'CSR — render in the browser' : 'SSR — render on the server'}
+              <span class="phase" data-phase={kind}>
+                idle
+              </span>
+            </div>
+            <div class="pane-screen is-blank" data-screen={kind}>
+              <h4>Concert review</h4>
+              <p>The band played for three hours. The crowd wanted four.</p>
+              <p>
+                <button data-cheer={kind} type="button">
+                  cheer 👏 <span data-count={kind}>0</span>
+                </button>
+              </p>
+            </div>
+            <ul class="demo-log" data-log={kind} />
+          </section>
+        ))
+      }
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .controls {
+    display: flex;
+    gap: 1.2rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+  }
+
+  .latency {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+
+  .latency output {
+    min-width: 4.5ch;
+    text-align: right;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .phase {
+    margin-left: auto;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    padding: 0 0.5rem;
+  }
+
+  .phase[data-state='painted'] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .phase[data-state='interactive'] {
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+
+  [data-cheer][data-inert='true'] {
+    opacity: 0.99; /* looks identical — that's the point */
+  }
+</style>
+
+<script>
+  import { fakeFetch, wait, stopwatch } from '../../lib/fake-network';
+
+  const root = document.getElementById('fpr-root');
+  if (root) {
+    const latencyInput = document.getElementById('fpr-latency') as HTMLInputElement;
+    const latencyOut = document.getElementById('fpr-ms') as HTMLOutputElement;
+    latencyInput.addEventListener('input', () => (latencyOut.value = latencyInput.value));
+    const loadButton = document.getElementById('fpr-load') as HTMLButtonElement;
+
+    const el = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
+
+    function pane(kind: 'csr' | 'ssr') {
+      return {
+        screen: el<HTMLElement>(`[data-screen="${kind}"]`),
+        phase: el<HTMLElement>(`[data-phase="${kind}"]`),
+        log: el<HTMLElement>(`[data-log="${kind}"]`),
+        cheer: el<HTMLButtonElement>(`[data-cheer="${kind}"]`),
+        count: el<HTMLElement>(`[data-count="${kind}"]`),
+      };
+    }
+
+    let generation = 0;
+
+    function reset() {
+      generation += 1;
+      for (const kind of ['csr', 'ssr'] as const) {
+        const p = pane(kind);
+        p.screen.classList.add('is-blank');
+        p.phase.textContent = 'idle';
+        p.phase.removeAttribute('data-state');
+        p.log.innerHTML = '';
+        p.cheer.dataset.inert = 'true';
+        p.count.textContent = '0';
+      }
+      loadButton.disabled = false;
+    }
+
+    function wireCheer(kind: 'csr' | 'ssr', logLine: (text: string) => void) {
+      const p = pane(kind);
+      let cheers = 0;
+      p.cheer.onclick = () => {
+        if (p.cheer.dataset.inert === 'true') {
+          logLine('click! …nothing. Painted, not hydrated.');
+          return;
+        }
+        cheers += 1;
+        p.count.textContent = String(cheers);
+      };
+    }
+
+    async function run() {
+      generation += 1;
+      const gen = generation;
+      const stale = () => gen !== generation;
+      const L = Number(latencyInput.value);
+      loadButton.disabled = true;
+
+      const clock = stopwatch();
+      const logTo = (kind: 'csr' | 'ssr') => (text: string) => {
+        const item = document.createElement('li');
+        item.innerHTML = `<span class="t">${clock()}ms</span> ${text}`;
+        pane(kind).log.prepend(item);
+      };
+      const logCsr = logTo('csr');
+      const logSsr = logTo('ssr');
+
+      wireCheer('csr', logCsr);
+      wireCheer('ssr', logSsr);
+
+      const setPhase = (kind: 'csr' | 'ssr', state: string) => {
+        const p = pane(kind).phase;
+        p.textContent = state;
+        p.dataset.state = state;
+      };
+
+      // --- CSR timeline -------------------------------------------------
+      const csr = (async () => {
+        const p = pane('csr');
+        setPhase('csr', 'loading');
+        logCsr('GET / → empty HTML shell');
+        await fakeFetch(L * 0.6);
+        if (stale()) return;
+        logCsr('HTML arrived. Screen: still blank.');
+        logCsr('GET /bundle.js (the app)');
+        await fakeFetch(L * 1.8);
+        if (stale()) return;
+        logCsr('JS arrived, app boots');
+        logCsr('fetch /api/review (data)');
+        await fakeFetch(L * 0.8);
+        if (stale()) return;
+        p.screen.classList.remove('is-blank');
+        p.cheer.dataset.inert = 'false';
+        setPhase('csr', 'interactive');
+        logCsr('render → painted AND interactive');
+      })();
+
+      // --- SSR timeline -------------------------------------------------
+      const ssr = (async () => {
+        const p = pane('ssr');
+        setPhase('ssr', 'loading');
+        logSsr('GET / → server renders the page');
+        await fakeFetch(L * 1.1);
+        if (stale()) return;
+        p.screen.classList.remove('is-blank');
+        setPhase('ssr', 'painted');
+        logSsr('HTML arrived WITH content → painted. Try the button…');
+        logSsr('GET /bundle.js (same app, again)');
+        await fakeFetch(L * 1.8);
+        if (stale()) return;
+        logSsr('JS arrived, hydrating…');
+        await wait(180);
+        if (stale()) return;
+        p.cheer.dataset.inert = 'false';
+        setPhase('ssr', 'interactive');
+        logSsr('hydrated → interactive');
+      })();
+
+      await Promise.all([csr, ssr]);
+      if (!stale()) loadButton.disabled = false;
+    }
+
+    loadButton.addEventListener('click', () => {
+      reset();
+      void run();
+    });
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', reset);
+    reset();
+  }
+</script>

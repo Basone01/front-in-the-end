@@ -1,0 +1,195 @@
+---
+// State lesson 5 exhibit: the placement ladder as a quiz. Six real pieces of
+// state; pick each one's home; argue with the answer key.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: where should it live?"
+  reset
+  caption="The answer key is opinionated on purpose. If you disagree, good — being able to argue the placement is the skill; needing to is rare."
+>
+  <div id="stq-root">
+    <p class="prompt">
+      <span class="counter" id="stq-counter"></span>
+      <span id="stq-question"></span>
+    </p>
+    <div class="options" id="stq-options"></div>
+    <div class="feedback" id="stq-feedback" hidden>
+      <p id="stq-verdict"></p>
+      <p class="why" id="stq-why"></p>
+      <button id="stq-next" type="button">next</button>
+    </div>
+    <div class="done" id="stq-done" hidden>
+      <p id="stq-score"></p>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  #stq-root {
+    max-width: 36rem;
+  }
+
+  .prompt {
+    font-weight: 640;
+    font-size: 1rem;
+    margin: 0 0 0.7rem;
+  }
+
+  .counter {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .options :global(button) {
+    background: var(--bg) !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--line) !important;
+    font-size: 0.85rem !important;
+  }
+
+  .options :global(button:hover) {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+
+  .feedback {
+    margin-top: 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .feedback p {
+    margin: 0 0 0.5rem;
+  }
+
+  .why {
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+  }
+
+  .done p {
+    font-size: 1rem;
+    font-weight: 640;
+  }
+</style>
+
+<script>
+  const HOMES = ['the DOM / component', 'the URL', 'localStorage', 'the server (via cache)'] as const;
+
+  interface Q {
+    state: string;
+    answer: (typeof HOMES)[number];
+    why: string;
+  }
+
+  const QUESTIONS: Q[] = [
+    {
+      state: '“Which row of the table is being hovered”',
+      answer: 'the DOM / component',
+      why: 'Ephemeral, private, gone in a second. CSS :hover does it for free; at most, component state. Anything heavier is bureaucracy.',
+    },
+    {
+      state: '“The current filters on a dashboard your team shares by link”',
+      answer: 'the URL',
+      why: '“Shares by link” is the giveaway: if a colleague should see what you see, the state must travel in the link. URL, always.',
+    },
+    {
+      state: '“Dark mode preference”',
+      answer: 'localStorage',
+      why: 'Per-device, should survive refresh, shouldn’t need an account or a round-trip before first paint. (Sync it to the server too if logged-in users expect it to follow them.)',
+    },
+    {
+      state: '“The items in the user’s cart”',
+      answer: 'the server (via cache)',
+      why: 'Money-adjacent truth that must survive devices, tabs, and lawyers. The client holds a cache of it; the server owns it.',
+    },
+    {
+      state: '“Whether the FAQ accordion item is expanded”',
+      answer: 'the DOM / component',
+      why: 'A <details> element holds this perfectly. The DOM is a fine state container for state that is about the DOM.',
+    },
+    {
+      state: '“Which step of the 4-step signup wizard the user is on”',
+      answer: 'the URL',
+      why: 'Refresh shouldn’t restart the wizard, back should go back a step, and support should be able to say “send me the link”. /signup/step-3.',
+    },
+  ];
+
+  const root = document.getElementById('stq-root');
+  if (root) {
+    const counter = document.getElementById('stq-counter') as HTMLElement;
+    const question = document.getElementById('stq-question') as HTMLElement;
+    const options = document.getElementById('stq-options') as HTMLElement;
+    const feedback = document.getElementById('stq-feedback') as HTMLElement;
+    const verdict = document.getElementById('stq-verdict') as HTMLElement;
+    const why = document.getElementById('stq-why') as HTMLElement;
+    const nextBtn = document.getElementById('stq-next') as HTMLButtonElement;
+    const done = document.getElementById('stq-done') as HTMLElement;
+    const score = document.getElementById('stq-score') as HTMLElement;
+
+    let index = 0;
+    let correct = 0;
+
+    function show() {
+      if (index >= QUESTIONS.length) {
+        question.textContent = '';
+        counter.textContent = '';
+        options.innerHTML = '';
+        feedback.hidden = true;
+        done.hidden = false;
+        score.textContent = `${correct} / ${QUESTIONS.length} placed where the answer key wanted. Disagreements you can defend count double.`;
+        return;
+      }
+      const q = QUESTIONS[index];
+      done.hidden = true;
+      feedback.hidden = true;
+      counter.textContent = `${index + 1} of ${QUESTIONS.length}`;
+      question.textContent = `${q.state} — where does it live?`;
+      options.innerHTML = '';
+      for (const home of HOMES) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = home;
+        button.onclick = () => {
+          const right = home === q.answer;
+          if (right) correct += 1;
+          verdict.textContent = right
+            ? `✓ Agreed: ${q.answer}.`
+            : `The key says: ${q.answer} (you said ${home}).`;
+          why.textContent = q.why;
+          feedback.hidden = false;
+          options.innerHTML = '';
+        };
+        options.append(button);
+      }
+    }
+
+    nextBtn.onclick = () => {
+      index += 1;
+      show();
+    };
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      index = 0;
+      correct = 0;
+      show();
+    });
+
+    show();
+  }
+</script>

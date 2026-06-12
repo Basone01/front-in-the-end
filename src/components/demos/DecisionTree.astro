@@ -1,0 +1,229 @@
+---
+// Lesson 5 exhibit: the track's decision framework as a clickable tree.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: choose a rendering strategy"
+  reset
+  caption="A framework, not a law. If your answers change next quarter, the right answer changes too — that's the point of knowing the trade-offs instead of memorizing a winner."
+>
+  <div id="dtree-root">
+    <ol class="crumbs" id="dtree-crumbs"></ol>
+    <p class="question" id="dtree-question"></p>
+    <div class="options" id="dtree-options"></div>
+    <div class="verdict" id="dtree-verdict" hidden>
+      <p class="k">recommendation</p>
+      <h4 id="dtree-title"></h4>
+      <p id="dtree-why"></p>
+      <p class="eg" id="dtree-eg"></p>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  #dtree-root {
+    max-width: 36rem;
+  }
+
+  .crumbs {
+    list-style: none;
+    margin: 0 0 0.8rem;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+  }
+
+  .crumbs :global(li)::before {
+    content: '↳ ';
+    color: var(--accent);
+  }
+
+  .question {
+    font-weight: 640;
+    font-size: 1.02rem;
+    margin: 0 0 0.7rem;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .options :global(button) {
+    background: var(--bg) !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--line) !important;
+    text-align: left;
+    padding: 0.5rem 0.8rem !important;
+  }
+
+  .options :global(button:hover) {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+
+  .verdict {
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--accent-soft);
+    padding: 0.9rem 1.1rem;
+  }
+
+  .verdict .k {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin: 0 0 0.2rem;
+  }
+
+  .verdict h4 {
+    margin: 0 0 0.4rem;
+    font-size: 1.05rem;
+  }
+
+  .verdict p {
+    margin: 0.3rem 0 0;
+    font-size: 0.9rem;
+  }
+
+  .verdict .eg {
+    color: var(--ink-soft);
+    font-style: italic;
+    font-size: 0.84rem;
+  }
+</style>
+
+<script>
+  interface Question {
+    q: string;
+    options: [label: string, next: string][];
+  }
+
+  interface Verdict {
+    title: string;
+    why: string;
+    eg: string;
+  }
+
+  const questions: Record<string, Question> = {
+    start: {
+      q: 'What are people mostly doing here?',
+      options: [
+        ['Reading or browsing content', 'content'],
+        ['Operating an app — creating, editing, manipulating things', 'app'],
+      ],
+    },
+    content: {
+      q: 'Is each page roughly the same for everyone?',
+      options: [
+        ['Yes — or it changes rarely enough to rebuild', 'v-static'],
+        ['No — personalized or fresh on every request', 'content-fresh'],
+      ],
+    },
+    'content-fresh': {
+      q: 'Do strangers arrive from search and shared links?',
+      options: [
+        ['Yes — first paint and SEO are the business', 'v-server-templates'],
+        ['No — it lives behind a login', 'v-spa-acceptable'],
+      ],
+    },
+    app: {
+      q: 'What does a typical session look like?',
+      options: [
+        ['Long and dense — a dashboard, an editor, a tool people live in', 'app-long'],
+        ['Short and transactional — a checkout, a settings page, a form', 'v-mpa-sprinkles'],
+      ],
+    },
+    'app-long': {
+      q: 'Does the public (and Google) need to see it before logging in?',
+      options: [
+        ['Yes — public pages with app-grade interactivity', 'v-ssr-hydration'],
+        ['No — pure logged-in territory', 'v-spa'],
+      ],
+    },
+  };
+
+  const verdicts: Record<string, Verdict> = {
+    'v-static': {
+      title: 'Static pages (prerendered, CDN-served)',
+      why: 'Nothing beats a file. Build it once, cache it everywhere, sprinkle JS only where something genuinely moves.',
+      eg: 'Blogs, docs, marketing sites, this very website.',
+    },
+    'v-server-templates': {
+      title: 'Server-rendered pages + sprinkles or islands',
+      why: 'The server has the data and the user hits you cold — render HTML there, enhance in place. A SPA would make your fastest moment (first paint) your slowest.',
+      eg: 'News sites, storefront category pages, listings.',
+    },
+    'v-spa-acceptable': {
+      title: 'Your call — SPA or server-rendered both work',
+      why: 'Behind a login, SEO is irrelevant and the first-load penalty hits people who already chose you. Decide on session shape and team experience, not fashion.',
+      eg: 'Logged-in feeds, account areas, internal tools.',
+    },
+    'v-mpa-sprinkles': {
+      title: 'MPA with progressive enhancement',
+      why: 'Short sessions never amortize a bundle. Forms and links already do this job; add JS for inline validation and polish.',
+      eg: 'Checkouts, government services, settings pages.',
+    },
+    'v-ssr-hydration': {
+      title: 'SSR + hydration (or server components)',
+      why: 'You need both halves: HTML for the stranger arriving cold, a long-lived client app for the user who stays. You pay the hydration tax — pay it knowingly.',
+      eg: 'E-commerce product pages, social apps, booking flows.',
+    },
+    'v-spa': {
+      title: 'SPA (client-rendered)',
+      why: 'Long, dense sessions amortize the upfront bundle, and client-held state across interactions is the feature, not the bug.',
+      eg: 'Figma-likes, dashboards, email clients, editors.',
+    },
+  };
+
+  const root = document.getElementById('dtree-root');
+  if (root) {
+    const crumbs = document.getElementById('dtree-crumbs') as HTMLOListElement;
+    const questionEl = document.getElementById('dtree-question') as HTMLParagraphElement;
+    const optionsEl = document.getElementById('dtree-options') as HTMLDivElement;
+    const verdictEl = document.getElementById('dtree-verdict') as HTMLDivElement;
+
+    function show(nodeId: string) {
+      if (nodeId.startsWith('v-')) {
+        const verdict = verdicts[nodeId];
+        questionEl.hidden = true;
+        optionsEl.innerHTML = '';
+        verdictEl.hidden = false;
+        (document.getElementById('dtree-title') as HTMLElement).textContent = verdict.title;
+        (document.getElementById('dtree-why') as HTMLElement).textContent = verdict.why;
+        (document.getElementById('dtree-eg') as HTMLElement).textContent = `e.g. ${verdict.eg}`;
+        return;
+      }
+      const node = questions[nodeId];
+      questionEl.hidden = false;
+      questionEl.textContent = node.q;
+      verdictEl.hidden = true;
+      optionsEl.innerHTML = '';
+      for (const [label, next] of node.options) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.addEventListener('click', () => {
+          const crumb = document.createElement('li');
+          crumb.textContent = label;
+          crumbs.append(crumb);
+          show(next);
+        });
+        optionsEl.append(button);
+      }
+    }
+
+    function restart() {
+      crumbs.innerHTML = '';
+      show('start');
+    }
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', restart);
+    restart();
+  }
+</script>

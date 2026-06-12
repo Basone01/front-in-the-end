@@ -1,0 +1,178 @@
+---
+// State lesson 4 exhibit: two components each "fetched their own copy" of the
+// user. Edit the name and watch the header keep the old one — then turn on a
+// shared cache with invalidation and watch the bug become impossible.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the stale copy"
+  reset
+  caption="Both components show the same server data. In copy mode each fetched its own snapshot, so saving the form updates the server and the form — and the header happily shows the old name forever. The cache mode has one client copy, invalidated on write."
+>
+  <div id="stc-root">
+    <label class="mode">
+      <input type="checkbox" id="stc-cache" />
+      shared cache + invalidate on write
+    </label>
+
+    <div class="layout">
+      <div class="pane app">
+        <div class="pane-chrome">the app</div>
+        <div class="appbar">
+          welcome back, <strong id="stc-header">…</strong>
+          <span class="stale" id="stc-stale" hidden>stale!</span>
+        </div>
+        <div class="pane-screen">
+          <p class="formrow">
+            <label for="stc-name">display name</label>
+            <input type="text" id="stc-name" name="display-name" />
+            <button id="stc-save" type="button">save</button>
+            <span class="saving" id="stc-status"></span>
+          </p>
+        </div>
+      </div>
+
+      <div class="pane server">
+        <div class="pane-chrome">the server (source of truth)</div>
+        <div class="pane-screen">
+          <p class="truth">users/42.name = <strong id="stc-truth">…</strong></p>
+          <ul class="demo-log" id="stc-log"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .mode {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    margin-bottom: 0.9rem;
+    cursor: pointer;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .appbar {
+    border-bottom: 1px solid var(--line);
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background: var(--bg-inset);
+  }
+
+  .stale {
+    color: #c33;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    margin-left: 0.5rem;
+  }
+
+  .formrow {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 0;
+    font-size: 0.85rem;
+  }
+
+  .saving {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+  }
+
+  .truth {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    margin: 0 0 0.5rem;
+  }
+</style>
+
+<script>
+  import { fakeFetch } from '../../lib/fake-network';
+
+  const root = document.getElementById('stc-root');
+  if (root) {
+    const cacheMode = document.getElementById('stc-cache') as HTMLInputElement;
+    const headerEl = document.getElementById('stc-header') as HTMLElement;
+    const staleEl = document.getElementById('stc-stale') as HTMLElement;
+    const nameInput = document.getElementById('stc-name') as HTMLInputElement;
+    const saveBtn = document.getElementById('stc-save') as HTMLButtonElement;
+    const statusEl = document.getElementById('stc-status') as HTMLElement;
+    const truthEl = document.getElementById('stc-truth') as HTMLElement;
+    const logEl = document.getElementById('stc-log') as HTMLElement;
+
+    const log = (text: string) => {
+      const item = document.createElement('li');
+      item.textContent = text;
+      logEl.prepend(item);
+    };
+
+    let server = 'Somsak';
+    let headerCopy = ''; // copy mode: the header's private snapshot
+    let formCopy = '';
+    let cache = ''; // cache mode: the one client copy
+
+    function paint() {
+      const headerShows = cacheMode.checked ? cache : headerCopy;
+      headerEl.textContent = headerShows;
+      truthEl.textContent = `"${server}"`;
+      staleEl.hidden = headerShows === server;
+    }
+
+    async function initialFetch() {
+      log('GET /users/42 (header component)');
+      log('GET /users/42 (form component)');
+      await fakeFetch(300);
+      headerCopy = formCopy = cache = server;
+      nameInput.value = formCopy;
+      paint();
+    }
+
+    saveBtn.onclick = async () => {
+      const next = nameInput.value.trim();
+      if (!next) return;
+      statusEl.textContent = 'saving…';
+      log(`PUT /users/42 {name: "${next}"}`);
+      await fakeFetch(500);
+      server = next;
+      statusEl.textContent = '✓ saved';
+      if (cacheMode.checked) {
+        log('cache invalidated → refetch');
+        await fakeFetch(300);
+        cache = server;
+        log('GET /users/42 → fresh');
+      } else {
+        // Copy mode: the form updates ITS copy. The header? It fetched
+        // weeks ago (in component time). It has no idea anything happened.
+        formCopy = next;
+      }
+      paint();
+      setTimeout(() => (statusEl.textContent = ''), 1500);
+    };
+
+    cacheMode.addEventListener('change', () => {
+      if (cacheMode.checked) cache = headerCopy; // adopt whatever was shown
+      paint();
+    });
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      cacheMode.checked = false;
+      server = 'Somsak';
+      logEl.innerHTML = '';
+      statusEl.textContent = '';
+      void initialFetch();
+    });
+
+    void initialFetch();
+  }
+</script>

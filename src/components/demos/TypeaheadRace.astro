@@ -1,0 +1,199 @@
+---
+// Async lesson 2 exhibit: the classic typeahead race. Every keystroke fires a
+// request; the network returns them in whatever order it likes; the naive
+// handler applies whatever arrives last. Auto-type reproduces it reliably.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: requests finish out of order"
+  reset
+  caption="Watch the lanes: in naive mode an early, slow request for 'b' can land after the request for 'bangkok' and overwrite the right answer with the wrong one. The guard doesn't make the network ordered — it makes the UI stop trusting arrival order."
+>
+  <div id="tar-root">
+    <div class="controls">
+      <label class="mode">
+        <input type="checkbox" id="tar-guard" />
+        guard against stale responses
+      </label>
+      <button id="tar-auto" type="button">auto-type “bangkok”</button>
+    </div>
+
+    <p class="searchrow">
+      <input type="text" id="tar-input" name="city-search" placeholder="search cities… (type fast!)" autocomplete="off" />
+    </p>
+    <div class="resultbox">
+      <p class="showing">
+        results for <strong id="tar-for">—</strong>
+        <span class="mismatch" id="tar-mismatch" hidden>≠ what's in the box!</span>
+      </p>
+      <ul class="results" id="tar-results"></ul>
+    </div>
+
+    <ul class="demo-log lanes" id="tar-lanes"></ul>
+  </div>
+</Demo>
+
+<style>
+  .controls {
+    display: flex;
+    gap: 1.1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.7rem;
+  }
+
+  .mode {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+
+  .searchrow {
+    margin: 0 0 0.6rem;
+  }
+
+  .searchrow input {
+    width: min(22rem, 100%);
+  }
+
+  .resultbox {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+    padding: 0.6rem 0.8rem;
+    min-height: 5.5rem;
+    max-width: 22rem;
+  }
+
+  .showing {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    margin: 0 0 0.4rem;
+  }
+
+  .mismatch {
+    color: #c33;
+    font-weight: 700;
+  }
+
+  .results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+
+  .results :global(li) {
+    padding-block: 0.1rem;
+  }
+
+  .lanes {
+    margin-top: 0.7rem;
+    max-height: 10em;
+  }
+
+  .lanes :global(.applied) {
+    color: var(--ok);
+  }
+
+  .lanes :global(.discarded) {
+    color: var(--ink-faint);
+    text-decoration: line-through;
+  }
+
+  .lanes :global(.overwrote) {
+    color: #c33;
+  }
+</style>
+
+<script>
+  import { wait } from '../../lib/fake-network';
+
+  const CITIES = [
+    'Bangkok', 'Bandung', 'Bangalore', 'Barcelona', 'Basel', 'Beirut', 'Berlin',
+    'Bogotá', 'Boston', 'Brasília', 'Brisbane', 'Brussels', 'Bucharest', 'Budapest', 'Busan',
+  ];
+
+  const root = document.getElementById('tar-root');
+  if (root) {
+    const guard = document.getElementById('tar-guard') as HTMLInputElement;
+    const input = document.getElementById('tar-input') as HTMLInputElement;
+    const forEl = document.getElementById('tar-for') as HTMLElement;
+    const mismatch = document.getElementById('tar-mismatch') as HTMLElement;
+    const results = document.getElementById('tar-results') as HTMLElement;
+    const lanes = document.getElementById('tar-lanes') as HTMLElement;
+    const autoBtn = document.getElementById('tar-auto') as HTMLButtonElement;
+
+    let latest = 0; // the generation counter — the entire fix
+
+    function paintMismatch() {
+      mismatch.hidden =
+        forEl.textContent === `“${input.value}”` || forEl.textContent === '—' || input.value === '';
+    }
+
+    async function search(query: string) {
+      const requestId = ++latest;
+
+      const lane = document.createElement('li');
+      lane.innerHTML = `<span class="t">→</span> GET /cities?q=${query || '∅'} `;
+      const status = document.createElement('span');
+      status.textContent = '…in flight';
+      lane.append(status);
+      lanes.prepend(lane);
+
+      // Wild jitter on purpose: short queries hit more rows, so they're slower.
+      const latency = 400 + Math.random() * 1600 - query.length * 120;
+      await wait(Math.max(150, latency));
+
+      const matches = CITIES.filter((c) => c.toLowerCase().startsWith(query.toLowerCase()));
+
+      if (guard.checked && requestId !== latest) {
+        status.textContent = `→ ${Math.round(latency)}ms, discarded (stale)`;
+        lane.className = 'discarded';
+        return;
+      }
+
+      const wasStale = requestId !== latest;
+      status.textContent = `→ ${Math.round(latency)}ms, applied${wasStale ? ' (STALE — overwrote newer!)' : ''}`;
+      lane.className = wasStale ? 'overwrote' : 'applied';
+
+      forEl.textContent = `“${query}”`;
+      results.innerHTML = matches.length
+        ? matches.slice(0, 5).map((c) => `<li>📍 ${c}</li>`).join('')
+        : '<li>no matches</li>';
+      paintMismatch();
+    }
+
+    input.addEventListener('input', () => {
+      if (input.value) void search(input.value);
+      paintMismatch();
+    });
+
+    autoBtn.onclick = async () => {
+      autoBtn.disabled = true;
+      input.value = '';
+      for (const char of 'bangkok') {
+        input.value += char;
+        void search(input.value);
+        await wait(140); // a fast typist
+      }
+      autoBtn.disabled = false;
+      paintMismatch();
+    };
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      latest += 1; // orphan anything in flight
+      input.value = '';
+      forEl.textContent = '—';
+      results.innerHTML = '';
+      lanes.innerHTML = '';
+      mismatch.hidden = true;
+      guard.checked = false;
+    });
+  }
+</script>

@@ -1,0 +1,165 @@
+---
+// State lesson 2 exhibit: a tab bar and a remote control that both care about
+// "which tab is open". In copy mode each keeps its own version and syncs by
+// hand — and one writer forgets one reader. In lifted mode there is exactly
+// one version, so disagreement is impossible.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: two copies, one truth"
+  reset
+  caption="In copy mode, click the tabs directly and watch the remote go stale — the tab bar's click handler updates its own copy and forgets to tell anyone. Lift the state and the bug isn't fixed; it's unrepresentable."
+>
+  <div id="sol-root">
+    <label class="mode">
+      <input type="checkbox" id="sol-lift" />
+      lift the state (one source of truth)
+    </label>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome">settings page (tab bar)</div>
+        <div class="pane-screen">
+          <nav class="pane-nav" id="sol-tabs"></nav>
+          <p class="content" id="sol-content"></p>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">remote control (another component)</div>
+        <div class="pane-screen">
+          <p class="readout">
+            this component believes the open tab is:
+            <strong id="sol-belief">…</strong>
+            <span class="stale" id="sol-stale" hidden>— stale!</span>
+          </p>
+          <p class="row" id="sol-remote"></p>
+        </div>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .mode {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    margin-bottom: 0.9rem;
+    cursor: pointer;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  #sol-tabs :global(a[data-active='true']) {
+    color: var(--accent);
+    font-weight: 640;
+    text-decoration: underline;
+  }
+
+  .content {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+
+  .readout {
+    font-size: 0.85rem;
+  }
+
+  .stale {
+    color: #c33;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+  }
+
+  .row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0;
+  }
+
+  .row :global(button) {
+    font-size: 0.78rem !important;
+    padding: 0.25rem 0.6rem !important;
+  }
+</style>
+
+<script>
+  const root = document.getElementById('sol-root');
+  if (root) {
+    const TABS = ['Profile', 'Billing', 'Privacy'] as const;
+    const lift = document.getElementById('sol-lift') as HTMLInputElement;
+    const tabsNav = document.getElementById('sol-tabs') as HTMLElement;
+    const content = document.getElementById('sol-content') as HTMLElement;
+    const belief = document.getElementById('sol-belief') as HTMLElement;
+    const staleFlag = document.getElementById('sol-stale') as HTMLElement;
+    const remote = document.getElementById('sol-remote') as HTMLElement;
+
+    // Copy mode: two variables that are *supposed* to be kept in sync.
+    let tabBarCopy = 'Profile';
+    let remoteCopy = 'Profile';
+    // Lifted mode: the only variable.
+    let theTab = 'Profile';
+
+    const current = () => (lift.checked ? theTab : tabBarCopy);
+
+    function paint() {
+      tabsNav.innerHTML = TABS.map(
+        (tab) => `<a data-tab="${tab}" data-active="${tab === current()}">${tab}</a>`
+      ).join('');
+      tabsNav.querySelectorAll<HTMLElement>('[data-tab]').forEach((link) => {
+        link.onclick = () => {
+          if (lift.checked) {
+            theTab = link.dataset.tab!;
+          } else {
+            // The tab bar updates ITS copy. Telling the remote? Someone
+            // else's job, surely.
+            tabBarCopy = link.dataset.tab!;
+          }
+          paint();
+        };
+      });
+
+      content.textContent = `${current()} settings would render here.`;
+      const remoteBelief = lift.checked ? theTab : remoteCopy;
+      belief.textContent = remoteBelief;
+      staleFlag.hidden = remoteBelief === current();
+
+      remote.innerHTML = TABS.map((tab) => `<button data-go="${tab}">open ${tab}</button>`).join('');
+      remote.querySelectorAll<HTMLButtonElement>('[data-go]').forEach((button) => {
+        button.onclick = () => {
+          if (lift.checked) {
+            theTab = button.dataset.go!;
+          } else {
+            // The remote is diligent: it updates its copy AND the tab bar's.
+            remoteCopy = button.dataset.go!;
+            tabBarCopy = button.dataset.go!;
+          }
+          paint();
+        };
+      });
+    }
+
+    lift.addEventListener('change', () => {
+      // Entering lifted mode adopts whatever the tab bar showed.
+      theTab = tabBarCopy;
+      paint();
+    });
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      lift.checked = false;
+      tabBarCopy = remoteCopy = theTab = 'Profile';
+      paint();
+    });
+
+    paint();
+  }
+</script>

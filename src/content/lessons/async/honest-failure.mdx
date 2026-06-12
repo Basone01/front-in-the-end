@@ -1,0 +1,62 @@
+---
+title: "Failing honestly: retries, double submits, and idempotency"
+description: The deepest async bug isn't an error — it's not knowing whether the thing happened. Design for ambiguity with safe retries, and the impatient user stops being dangerous.
+track: async
+order: 5
+duration: 12 min
+---
+
+import DoubleSubmit from '../../../components/demos/DoubleSubmit.astro';
+
+End the track with its hardest truth, the one underneath every timeout you've ever seen: **when a request fails, you usually don't know whether it failed.** A network error means the *response* didn't arrive. The request may never have left; it may have died en route; or — the case that matters — it may have **reached the server, done its work, charged the card, created the order**, and only the confirmation drowned on the way back. From the client, these are indistinguishable. The question "did it happen?" has no client-side answer.
+
+Now add the user. They clicked "Place order", watched a spinner hang, and did what every human does to an unresponsive machine: clicked again. Maybe twice. Each click is a new request into the same ambiguity. This lesson's claim: **you cannot eliminate the ambiguity, so the only robust design is to make repeating a request harmless** — and once repeats are harmless, impatient users, flaky networks, *and your own retry logic* all stop being threats and become noise.
+
+## Watch the impatient user win
+
+A checkout button against a slow server, and a user with a normal human thumb. Try the defenses in order — naive, then disable-while-pending, then the idempotency key — using the impatient-user button each time:
+
+<DoubleSubmit />
+
+Naive: three clicks, three orders, $147 for one purchase, and a support ticket with a refund. Now the interesting comparison — the two fixes are *not equivalent*, and seeing why is the lesson.
+
+## Fix one patches the button; fix two fixes the world
+
+**Disable while pending** is the frontend reflex, and it genuinely helps — it removes the double-*click*. Ship it everywhere; it's one attribute. But inventory what it doesn't cover: the user who refreshes mid-spinner and submits the fresh page. The flaky connection where the first request *succeeded silently* and the "retry" you offered (lesson one says always offer retry!) submits again. Two tabs. Your own code's automatic retry on timeout. Disable-while-pending guards one button in one tab in one page-lifetime — the ambiguity lives everywhere else.
+
+**The idempotency key** attacks the actual problem: it gives the *operation* an identity, so the server can recognize a repeat when it sees one.
+
+```js
+// Key identifies the operation (this checkout), NOT the click:
+const idempotencyKey = crypto.randomUUID();   // minted when checkout begins
+
+async function placeOrder(cart) {
+  return api.post('/orders', cart, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
+}
+```
+
+Server-side, the contract is: *same key seen again → don't redo the work; return the original result.* Now trace every failure mode through it: double click — same key, one order. Retry after timeout where the original secretly succeeded — same key, server returns that original order, and the client *finally learns the answer to "did it happen?"*. Two tabs racing — same key, one winner. **Retrying stopped being dangerous, which means you can finally retry freely** — the safe-retry loop that lesson one's retry button and every auto-retry-with-backoff policy quietly depend on. (Backoff etiquette in one line: retry transient failures — network errors, 503s — a couple of times with increasing delays and a little randomness; never retry a 400-class "no", because the server didn't fail, it *answered*.)
+
+Yes, this fix lives partly on the backend — and that's the point. This is the lesson where honest frontend engineering means saying, in the planning meeting: *the client cannot solve duplicate-submission alone; I need the server to honor a key.* Knowing where your half of the problem ends is part of the craft. (If the backend won't budge, the fallback stack is: disable-while-pending + a post-submit "did this already happen?" check on retry + server-side natural-key dedup like cart-id. Weaker, but layered.)
+
+## The chaos kit: making failure show up in dev
+
+Everything in this track shares one enemy: **failure is invisible at your desk.** Localhost never reorders, never times out, never double-charges. The habits that actually inoculate a codebase are the ones that make failure cheap to see — and you've been using them all track:
+
+- **A latency knob.** Every demo here wraps its fake network in an adjustable delay — your dev environment deserves the same, one `await wait(env.CHAOS_MS)` in your API layer. Sliding it to 2000 for an afternoon finds more async bugs than a quarter of bug reports.
+- **A failure-rate knob.** `if (Math.random() < env.CHAOS_FAIL) throw` — suddenly every component that skipped lesson one's error state introduces itself.
+- **Devtools as discipline.** Offline mode before every PR that touches a mutation; Slow 4G once a week. Free, built-in, unused.
+
+This isn't tooling advice so much as a worldview: **the unhappy path is a first-class feature** with its own acceptance criteria. "What does this button do when clicked twice on a dying connection?" is a requirement, not an edge case — and teams that ask it in review ship the tickets that never get filed.
+
+## The track, folded shut
+
+The async track in five sentences. The network is part of your UI: four states, all designed (lesson one). Arrival order is noise — stamp requests and drop the stale (lesson two). Don't pay for doomed work: debounce the burst, abort the superseded (lesson three). Lie kindly only with a snapshot, a likely yes, and a visible apology (lesson four). And beneath it all, assume every request might secretly have succeeded — so give operations identities and make repeats harmless (this one).
+
+Run those five against any async bug you've ever shipped and one of them names it. That's the test of a mental model: not whether it sounds wise, but whether it has a drawer for every bug.
+
+---
+
+**The takeaway:** failure's deepest form is ambiguity — *did it happen?* — and the cure isn't preventing repeats but defusing them: idempotency keys to make retries safe, disable-while-pending as the cheap first layer, backoff with judgment, and a dev environment where failure is loud. The network will stay slow, unordered, and unreliable. Your interface gets to be honest about it anyway — and that honesty, applied with the whole track's toolkit, is what users experience as *this app just works*.

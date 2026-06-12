@@ -1,0 +1,75 @@
+---
+title: Single source of truth
+description: Every copy of a fact is a future disagreement. The fix isn't better synchronization — it's making disagreement structurally impossible.
+track: state
+order: 2
+duration: 11 min
+---
+
+import SyncOrLift from '../../../components/demos/SyncOrLift.astro';
+
+Last lesson's bug was storing a value you could have computed. This lesson's bug is its bigger sibling: storing the *same* fact in two places on purpose, and promising to keep them in sync.
+
+The promise has a structure worth naming. The moment a fact exists in two places, your codebase contains an invisible rule: **"every write to copy A must also write to copy B."** That rule has the same fatal properties as last lesson's contract — no compiler checks it, no test suite knows it exists, and the person who breaks it will be someone (possibly future-you) who never knew it was there. Synchronization code doesn't fail when it's written; it fails when the fifth writer shows up.
+
+So the claim, stated as policy: **"single source of truth" is not a style preference. It's the difference between a bug you fix and a bug that cannot occur.** When one fact has one home, disagreement isn't unlikely — it's *unrepresentable*. There is no second value to disagree with.
+
+## Watch the fifth writer arrive
+
+A settings page with a tab bar, and elsewhere in the app, a remote control that also cares which tab is open. In copy mode, each component keeps its own version. The remote is a good citizen — when *you use it*, it updates both copies. The tab bar's click handler updates its own and… well. Click the tabs directly:
+
+<SyncOrLift />
+
+Notice the shape of the failure: **it's asymmetric.** The sync code that exists works fine; the bug is the sync code that *doesn't exist* — the path nobody wrote. This is why "we'll just be careful to sync them" fails as an engineering strategy: being careful works for the writes you remember, and the bug is by definition in the one you didn't. With three components and two writers it's manageable; with ten components it's a part-time job; with a team, it's a genre of bug report.
+
+Now flip the lift switch. Nothing got smarter — there's just only one variable left, and both components read it. The stale label didn't get fixed; it got **deleted from the space of possible states**.
+
+## "Lifting state up," demystified
+
+React's docs call the fix *lifting state up*, and it's worth seeing that the idea is older and bigger than React: when two parts of a system need the same fact, **move the fact to a place both can reach, and make both of them readers.**
+
+```jsx
+// Before: two owners, a sync protocol, and a prayer
+function TabBar()  { const [tab, setTab] = useState('profile'); /* … */ }
+function Remote()  { const [tab, setTab] = useState('profile'); /* … */ }
+
+// After: one owner; the others are told, not asked
+function SettingsPage() {
+  const [tab, setTab] = useState('profile');
+  return (
+    <>
+      <TabBar  current={tab} onChange={setTab} />
+      <Remote  current={tab} onChange={setTab} />
+    </>
+  );
+}
+```
+
+The children become **stateless about the tab** — they render what they're given and report what the user did. All writes converge on one `setTab`. The "sync protocol" is gone, replaced by ordinary data flow downward.
+
+This costs something, and pretending otherwise breeds cynics: the owner is now higher in the tree, props travel further, and a deeply shared fact can mean threading values through layers that don't care about them (the famous prop-drilling complaint). Context, stores, and state managers exist precisely to relieve that — **they're delivery mechanisms for a single source, not alternatives to it.** A Zustand store or a context provider with one `tab` value is single-source-of-truth with better plumbing. Ten components each with their own `useState` synced by effects is multi-source with extra steps, no matter how modern the hooks look.
+
+## The audit question: who else thinks they own this?
+
+The skill that transfers to Monday is noticing duplication *before* it bites. Copies of truth hide in respectable costumes:
+
+- **The mirrored prop.** `useState(props.value)` — a component photocopying its input at mount, so updates to the prop no longer reach the screen. (Initial-value-then-fork is occasionally intended — a draft! — but then *name* it `draft`, because that's what it is.)
+- **The convenience cache.** A `currentUser` kept in three stores "so we don't have to pass it around". Three stores, three update paths, one logout button that clears two of them.
+- **The DOM double.** A `useState` for the input's text *and* reliance on the input element's own value — two systems both convinced they own what the user typed. Pick one: controlled (your state is the source, the DOM reflects it) or uncontrolled (the DOM is the source, read it when needed). Both are legitimate; *both at once* is the bug.
+- **The synced effect.** As in lesson one: `useEffect` watching A to write B is the smell of two homes for one fact.
+
+<div class="aside">
+
+**Deliberate copies exist — they're called caches and drafts.** A form that copies server data into local editing state, an offline replica, a memoized result: all are second homes for a fact, taken on *knowingly*, with a reconciliation story (save/discard, sync, invalidate). The difference between a cache and a bug is that a cache knows it's a copy. Lesson four is entirely about the biggest such copy in your app.
+
+</div>
+
+## How to apply this on Monday
+
+1. **When two UI elements disagree on a fact, don't patch the sync — hunt the second home.** The fix that lasts is a deletion, not another event listener.
+2. **Before adding `useState`, ask: does this fact already live somewhere?** In a parent, a store, the URL, the server cache? The cheapest state is the state you don't create.
+3. **When you must copy (drafts, caches), make the copy loud.** Name it `draft`/`cached`, and write down what reconciles it. Quiet copies are the ones that rot.
+
+---
+
+**The takeaway:** every duplicated fact carries an invisible sync rule that someone will eventually break — so don't manage the disagreement, make it unrepresentable: one fact, one home, everyone else reads. Next lesson: once a fact has a single home, *which* home? The component, the URL, the browser's storage, the server — a placement ladder, and a demo where the wrong rung loses your user's work.
