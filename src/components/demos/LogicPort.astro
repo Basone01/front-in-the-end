@@ -1,0 +1,237 @@
+---
+// Thinking lesson 2 exhibit: one shipping-cost module, two generations of UI.
+// The 2026 redesign replaced every pixel — and imported the same function.
+// The tests never noticed the rewrite, because the logic never moved.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the rewrite that didn't touch the logic"
+  caption="Switch between the 2019 UI and the 2026 redesign: different widgets, same module, same answers. The test panel runs against shipping.js directly — no DOM, no framework — which is why it survived the redesign without editing a line."
+>
+  <div id="lgp-root">
+    <div class="tabs">
+      <button data-ui="classic" class="tab is-active" type="button">2019 app</button>
+      <button data-ui="modern" class="tab" type="button">2026 redesign</button>
+      <span class="module">imports <code>shipping.js</code> — unchanged since 2019</span>
+    </div>
+
+    <div class="cols">
+      <section class="pane">
+        <div class="pane-chrome" id="lgp-chrome">checkout — classic</div>
+        <div class="pane-screen">
+          <div id="lgp-classic">
+            <p class="frm">
+              <label>weight
+                <select id="lgp-c-weight">
+                  <option value="1">1 kg</option>
+                  <option value="3">3 kg</option>
+                  <option value="8">8 kg</option>
+                </select>
+              </label>
+              <label><input type="checkbox" id="lgp-c-express" /> express</label>
+              <label><input type="checkbox" id="lgp-c-intl" /> international</label>
+              <button id="lgp-c-calc" type="button">calculate</button>
+            </p>
+            <p class="result">shipping: <strong id="lgp-c-result">—</strong></p>
+          </div>
+          <div id="lgp-modern" hidden>
+            <p class="frm">
+              <label class="slider">weight <output id="lgp-m-out">2</output> kg
+                <input type="range" id="lgp-m-weight" min="1" max="10" value="2" />
+              </label>
+              <label><input type="checkbox" id="lgp-m-express" /> ⚡ express</label>
+              <label><input type="checkbox" id="lgp-m-intl" /> 🌏 international</label>
+            </p>
+            <p class="result big">→ <strong id="lgp-m-result">—</strong> <span class="live">(live, no button)</span></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-chrome">shipping.test.js</div>
+        <div class="pane-screen">
+          <ul class="testlist" id="lgp-tests"></ul>
+        </div>
+      </section>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+  }
+
+  .tab {
+    background: var(--bg) !important;
+    color: var(--ink-soft) !important;
+    border: 1px solid var(--line) !important;
+    font-size: 0.8rem !important;
+  }
+
+  .tab.is-active {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+
+  .module {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    margin-left: auto;
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .frm {
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .frm select {
+    font: inherit;
+    font-size: 0.82rem;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.15rem 0.3rem;
+    margin-left: 0.3rem;
+  }
+
+  .slider {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .result {
+    font-size: 0.92rem;
+    margin: 0;
+  }
+
+  .result.big strong {
+    font-size: 1.25rem;
+    color: var(--accent);
+  }
+
+  .live {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--ink-faint);
+  }
+
+  .testlist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+  }
+
+  .testlist :global(li) {
+    padding-block: 0.15rem;
+  }
+
+  .testlist :global(li.pass)::before {
+    content: '✓ ';
+    color: var(--ok);
+  }
+</style>
+
+<script>
+  // --- shipping.js — the module both UIs (and the tests) import ----------
+  interface Order {
+    weightKg: number;
+    express: boolean;
+    international: boolean;
+  }
+
+  function shippingCost({ weightKg, express, international }: Order): number {
+    let cost = 40 + weightKg * 12;
+    if (international) cost = cost * 2.5 + 90;
+    if (express) cost *= 1.8;
+    if (!international && !express && cost > 120) cost = 120; // domestic cap
+    return Math.round(cost);
+  }
+
+  const baht = (n: number) => `฿${n}`;
+
+  const root = document.getElementById('lgp-root');
+  if (root) {
+    // --- the 2019 UI: dropdowns and a calculate button -------------------
+    const cResult = document.getElementById('lgp-c-result') as HTMLElement;
+    (document.getElementById('lgp-c-calc') as HTMLButtonElement).onclick = () => {
+      cResult.textContent = baht(
+        shippingCost({
+          weightKg: Number((document.getElementById('lgp-c-weight') as HTMLSelectElement).value),
+          express: (document.getElementById('lgp-c-express') as HTMLInputElement).checked,
+          international: (document.getElementById('lgp-c-intl') as HTMLInputElement).checked,
+        })
+      );
+    };
+
+    // --- the 2026 UI: sliders, live recompute, no button ----------------
+    const mWeight = document.getElementById('lgp-m-weight') as HTMLInputElement;
+    const mOut = document.getElementById('lgp-m-out') as HTMLOutputElement;
+    const mResult = document.getElementById('lgp-m-result') as HTMLElement;
+    const mExpress = document.getElementById('lgp-m-express') as HTMLInputElement;
+    const mIntl = document.getElementById('lgp-m-intl') as HTMLInputElement;
+
+    function modernPaint() {
+      mOut.value = mWeight.value;
+      mResult.textContent = baht(
+        shippingCost({
+          weightKg: Number(mWeight.value),
+          express: mExpress.checked,
+          international: mIntl.checked,
+        })
+      );
+    }
+    [mWeight, mExpress, mIntl].forEach((input) => input.addEventListener('input', modernPaint));
+    modernPaint();
+
+    // --- tab switching ---------------------------------------------------
+    const chrome = document.getElementById('lgp-chrome') as HTMLElement;
+    root.querySelectorAll<HTMLButtonElement>('[data-ui]').forEach((tab) => {
+      tab.onclick = () => {
+        root.querySelectorAll('.tab').forEach((t) => t.classList.remove('is-active'));
+        tab.classList.add('is-active');
+        const modern = tab.dataset.ui === 'modern';
+        (document.getElementById('lgp-classic') as HTMLElement).hidden = modern;
+        (document.getElementById('lgp-modern') as HTMLElement).hidden = !modern;
+        chrome.textContent = modern ? 'checkout — redesign' : 'checkout — classic';
+      };
+    });
+
+    // --- shipping.test.js: runs against the module, not the UI ----------
+    const cases: [string, Order, number][] = [
+      ['1kg domestic standard', { weightKg: 1, express: false, international: false }, 52],
+      ['8kg domestic hits the cap', { weightKg: 8, express: false, international: false }, 120],
+      ['3kg domestic express', { weightKg: 3, express: true, international: false }, 137],
+      ['3kg international', { weightKg: 3, express: false, international: true }, 280],
+    ];
+    const testsEl = document.getElementById('lgp-tests') as HTMLElement;
+    testsEl.innerHTML = cases
+      .map(([name, order, expected]) => {
+        const pass = shippingCost(order) === expected;
+        return `<li class="${pass ? 'pass' : ''}">${name} → ${baht(expected)}</li>`;
+      })
+      .join('');
+  }
+</script>

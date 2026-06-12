@@ -1,5 +1,5 @@
 export interface Track {
-  id: 'rendering' | 'state' | 'async';
+  id: 'rendering' | 'state' | 'async' | 'thinking';
   title: string;
   tagline: string;
   status: 'live' | 'soon';
@@ -25,6 +25,13 @@ export const tracks: Track[] = [
     title: 'Async & race conditions',
     tagline:
       'Requests finish out of order, users click twice, networks lie. Loading states, cancellation, and optimistic updates done honestly.',
+    status: 'live',
+  },
+  {
+    id: 'thinking',
+    title: 'Thinking in frontend',
+    tagline:
+      'The skills that survive the next framework: the platform underneath, logic that outlives views, components designed like APIs, and a knowledge portfolio that compounds instead of depreciating.',
     status: 'live',
   },
 ];

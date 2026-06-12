@@ -1,0 +1,47 @@
+---
+title: Surviving the churn
+description: Frontend knowledge has a half-life, and pretending otherwise is how careers stall. Sort your learning into what compounds and what depreciates — then read every new tool's price tag the same way.
+track: thinking
+order: 5
+duration: 10 min
+---
+
+import SkillHalfLife from '../../../components/demos/SkillHalfLife.astro';
+
+Every frontend engineer eventually has the 2 a.m. realization: *some* of what they've learned is rotting. The Redux middleware mastery that was interview gold in 2018. The class-component lifecycle diagrams. The webpack config wizardry. Each was real expertise, hard-won — and each now mostly identifies when you learned frontend, like tree rings.
+
+The trap is responding with either of the two bad postures. **Cynicism** — "it's all churn, why learn anything deeply" — which caps you at permanent intermediate. Or **exhaustion** — trying to keep *everything* current, the treadmill that burns people out of the field. This track has been quietly building the third posture, and this closing lesson makes it explicit: **frontend knowledge comes in two kinds with different half-lives, and a deliberate portfolio — heavy on the compounding kind, strategically current on the depreciating kind — outperforms both postures forever.**
+
+## The two shelves
+
+**Platform knowledge compounds.** The DOM and its events, HTTP and caching, the URL, forms, CSS layout, the event loop, accessibility semantics — these are the substrate everything else runs on. They change *additively* (new APIs arrive; old ones keep working — the web's backward compatibility is a covenant), so what you learned in 2015 is still true and your 2026 learning stacks on top. Better: every framework concept is a *derivative* of this layer, so platform depth makes each new tool cheaper to learn. That's compounding in the financial sense — returns that generate returns.
+
+**Tool knowledge depreciates.** Framework APIs, vendor conventions, config dialects, this year's state manager. Genuinely necessary — you ship this quarter's work with it, and "I only learn fundamentals" is its own kind of uselessness — but it's *rented* knowledge with a half-life of maybe three to five years, and treating it as the core of your expertise means re-earning your seniority every framework cycle.
+
+The skill is telling them apart on sight, because they arrive dressed identically — both come as docs, conference talks, and job requirements. Sort:
+
+<SkillHalfLife />
+
+Notice the pattern in the answer key: every depreciating skill has a durable layer *underneath* it — Next routing is HTTP's resource model in vendor costume, Tailwind is CSS in shorthand, `useEffect` rules are closures and lifecycles. That's the studying trick this whole site is built on: **when you must learn a tool (and you must), spend the extra 20% to identify which part is the tool and which part is the platform wearing the tool's clothes.** The 20% is the part you keep.
+
+## Reading a new tool's price tag
+
+The other half of surviving churn is evaluating the next shiny thing without either reflexive adoption or reflexive grumpiness. You already own the method — it's been every track's closing move — and it's three questions:
+
+1. **What wall does this get me past?** (Rendering track, lesson five.) If nobody in the room can name the *specific* problem — not "DX", a problem — the tool is a solution shopping for one. The 20-line-framework exercise is what makes this question answerable: you know what the baseline is, so you can see what's being automated.
+2. **What was I getting for free that I'm now buying back?** Every abstraction trades away platform defaults — the SPA bought statefulness and bought back navigation; CSS-in-JS bought colocation and bought back the cascade and static extraction. The trade may be great. It is never free, and vendors never volunteer the second half.
+3. **What's the exit cost?** The lesson-two question, applied at adoption time: when this tool sunsets — and the base rate says it will — what's fused to it? Tools that touch only the adapter layer (a build tool, a styling approach) have cheap exits. Tools that want to own your data model, your routing, *and* your components are proposing marriage; price accordingly.
+
+Run those three against any technology of the last decade and the answers were available *at the time* — which is the encouraging part. Churn is survivable not because you predict winners, but because **the price tags are readable in advance** if you know the platform well enough to read them.
+
+## The track, and the site, folded shut
+
+Four lessons of this track, one sentence each. A framework automates one sentence — state to DOM, efficiently — and knowing the raw version makes every framework legible (lesson one). Product rules belong in plain modules where rewrites can't reach them (lesson two). Interfaces should be exactly the size of the truth — impossible states unrepresentable (lesson three). And the platform's own component model is the one interface with no expiry date (lesson four).
+
+Underneath all four, and underneath the rendering, state, and async tracks too, one habit: **see through the current tool to the problem it stands on.** The walls are permanent — documents needed interactivity, state needed one home, the network needed honesty, the DOM needed deriving. The tools that get past each wall rotate. Engineers who know the walls hire the tools; engineers who only know the tools get hired by them.
+
+Frameworks change. The reasons don't. That's not a tagline — it's a career strategy.
+
+---
+
+**The takeaway:** keep two shelves — platform knowledge that compounds and tool knowledge that depreciates — invest deliberately in the first, stay strategically current on the second, extract the durable 20% from every tool you learn, and read every new technology's price tag with the three questions: what wall, what's bought back, what's the exit. Do that for a decade and the churn stops being a threat; it's just the weather, and you own a good coat.

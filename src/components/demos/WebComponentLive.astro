@@ -1,0 +1,136 @@
+---
+// Thinking lesson 4 exhibit: a real custom element, defined in this page's
+// script, used three times in plain HTML below. No framework, no build step
+// — the same tag would work unchanged inside React, Vue, or a 2031 framework.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: <star-rating>, a living custom element"
+  reset
+  caption="Three instances of one element, defined with customElements.define in ~30 lines. Click the stars; watch the change events. The host page — any host page, in any framework — talks to it like it talks to <select>: attributes in, events out."
+>
+  <div id="wcl-root">
+    <div class="uses">
+      <p class="use">
+        <span class="lbl">product page</span>
+        <star-rating value="4"></star-rating>
+      </p>
+      <p class="use">
+        <span class="lbl">review form</span>
+        <star-rating value="0"></star-rating>
+      </p>
+      <p class="use">
+        <span class="lbl">10-star variant (max attribute)</span>
+        <star-rating value="7" max="10"></star-rating>
+      </p>
+    </div>
+    <ul class="demo-log" id="wcl-log"></ul>
+  </div>
+</Demo>
+
+<style>
+  .uses {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .use {
+    display: flex;
+    gap: 0.9rem;
+    align-items: center;
+    margin: 0;
+  }
+
+  .lbl {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    min-width: 16ch;
+  }
+
+  #wcl-root :global(star-rating) {
+    font-size: 1.15rem;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: 0.1em;
+  }
+
+  #wcl-root :global(star-rating .on) {
+    color: var(--accent);
+  }
+
+  #wcl-root :global(star-rating .off) {
+    color: var(--line);
+  }
+
+  #wcl-log {
+    max-height: 6.5em;
+  }
+</style>
+
+<script>
+  // The entire component. No imports.
+  class StarRating extends HTMLElement {
+    static observedAttributes = ['value', 'max'];
+
+    get value() {
+      return Number(this.getAttribute('value') ?? 0);
+    }
+
+    get max() {
+      return Number(this.getAttribute('max') ?? 5);
+    }
+
+    connectedCallback() {
+      this.setAttribute('role', 'slider');
+      this.render();
+      this.addEventListener('click', (event) => {
+        const star = (event.target as HTMLElement).closest('[data-star]');
+        if (!star) return;
+        this.setAttribute('value', (star as HTMLElement).dataset.star!);
+        this.dispatchEvent(new CustomEvent('change', { detail: this.value, bubbles: true }));
+      });
+    }
+
+    attributeChangedCallback() {
+      if (this.isConnected) this.render();
+    }
+
+    render() {
+      this.setAttribute('aria-valuenow', String(this.value));
+      this.innerHTML = Array.from({ length: this.max }, (_, i) => {
+        const n = i + 1;
+        const on = n <= this.value;
+        return `<span data-star="${n}" class="${on ? 'on' : 'off'}">${on ? '★' : '☆'}</span>`;
+      }).join('');
+    }
+  }
+
+  if (!customElements.get('star-rating')) {
+    customElements.define('star-rating', StarRating);
+  }
+
+  // The host page, listening like it would to any input:
+  const root = document.getElementById('wcl-root');
+  if (root) {
+    const log = document.getElementById('wcl-log') as HTMLElement;
+    root.addEventListener('change', (event) => {
+      const item = document.createElement('li');
+      const detail = (event as CustomEvent).detail;
+      item.textContent = `change event → value=${detail} (host page heard it)`;
+      log.prepend(item);
+    });
+
+    const initial = [...root.querySelectorAll('star-rating')].map((el) => ({
+      el,
+      value: el.getAttribute('value')!,
+    }));
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      initial.forEach(({ el, value }) => el.setAttribute('value', value));
+      log.innerHTML = '';
+    });
+  }
+</script>

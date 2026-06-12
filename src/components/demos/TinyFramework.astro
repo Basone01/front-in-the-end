@@ -1,0 +1,180 @@
+---
+// Thinking lesson 1 exhibit: the same task app twice. The manual version
+// updates the DOM by hand in every handler — and one handler forgets one
+// update. The declarative version is state → render(): the 20 lines every
+// framework automates.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: a framework in 20 lines"
+  reset
+  caption="Add tasks, click them done, then 'clear completed' in both panes. The manual pane's clear handler forgets the done-counter — same disease as the stored cart total, DOM edition. The declarative pane re-renders from state, so there is no second copy to forget. A framework is this idea plus performance work."
+>
+  <div id="tfw-root" class="cols">
+    {
+      ['manual', 'decl'].map((kind) => (
+        <section class="pane">
+          <div class="pane-chrome">
+            {kind === 'manual' ? 'manual DOM updates' : 'state → render()'}
+            <span class="oops" data-oops={kind} hidden>
+              counters ≠ list!
+            </span>
+          </div>
+          <div class="pane-screen">
+            <p class="counts">
+              <span data-open={kind}>0</span> open · <span data-done={kind}>0</span> done
+            </p>
+            <ul class="tasks" data-tasks={kind} />
+            <p class="row">
+              <button data-addtask={kind} type="button">add task</button>
+              <button data-clear={kind} type="button">clear completed</button>
+            </p>
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</Demo>
+
+<style>
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .oops {
+    margin-left: auto;
+    color: #c33;
+    font-weight: 700;
+  }
+
+  .counts {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    margin: 0 0 0.4rem;
+  }
+
+  .tasks {
+    list-style: none;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    font-size: 0.85rem;
+    min-height: 5em;
+  }
+
+  .tasks :global(li) {
+    cursor: pointer;
+    padding-block: 0.15rem;
+    border-bottom: 1px dashed var(--line);
+  }
+
+  .tasks :global(li.done) {
+    text-decoration: line-through;
+    color: var(--ink-faint);
+  }
+
+  .row {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0;
+  }
+</style>
+
+<script>
+  const NAMES = ['water the monstera', 'fix the flaky test', 'review the PR', 'rotate the API key', 'update the changelog'];
+
+  const root = document.getElementById('tfw-root');
+  if (root) {
+    const el = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
+
+    // ---- Pane 1: manual DOM updates. The DOM *is* the data; every handler
+    // must remember every read-out. -------------------------------------
+    function manualPane() {
+      const list = el('[data-tasks="manual"]');
+      const openEl = el('[data-open="manual"]');
+      const doneEl = el('[data-done="manual"]');
+      const oops = el('[data-oops="manual"]');
+      let added = 0;
+
+      function checkDrift() {
+        // (demo harness only: compares the counters to the actual DOM)
+        const done = list.querySelectorAll('li.done').length;
+        const open = list.querySelectorAll('li:not(.done)').length;
+        oops.hidden = doneEl.textContent === String(done) && openEl.textContent === String(open);
+      }
+
+      el('[data-addtask="manual"]').onclick = () => {
+        const li = document.createElement('li');
+        li.textContent = NAMES[added++ % NAMES.length];
+        li.onclick = () => {
+          li.classList.toggle('done');
+          const delta = li.classList.contains('done') ? 1 : -1;
+          doneEl.textContent = String(Number(doneEl.textContent) + delta);
+          openEl.textContent = String(Number(openEl.textContent) - delta);
+          checkDrift();
+        };
+        list.append(li);
+        openEl.textContent = String(Number(openEl.textContent) + 1); // remembered!
+        checkDrift();
+      };
+
+      el('[data-clear="manual"]').onclick = () => {
+        list.querySelectorAll('li.done').forEach((li) => li.remove());
+        // ...and the done-counter? This handler never heard of it.
+        checkDrift();
+      };
+
+      return () => {
+        list.innerHTML = '';
+        openEl.textContent = doneEl.textContent = '0';
+        oops.hidden = true;
+        added = 0;
+      };
+    }
+
+    // ---- Pane 2: the 20-line framework. One state, one render. ---------
+    function declarativePane() {
+      let tasks: { name: string; done: boolean }[] = [];
+      const list = el('[data-tasks="decl"]');
+      const openEl = el('[data-open="decl"]');
+      const doneEl = el('[data-done="decl"]');
+
+      function render() {
+        list.innerHTML = '';
+        tasks.forEach((task, i) => {
+          const li = document.createElement('li');
+          li.textContent = task.name;
+          li.className = task.done ? 'done' : '';
+          li.onclick = () => {
+            tasks[i] = { ...task, done: !task.done };
+            render();
+          };
+          list.append(li);
+        });
+        openEl.textContent = String(tasks.filter((t) => !t.done).length);
+        doneEl.textContent = String(tasks.filter((t) => t.done).length);
+      }
+
+      el('[data-addtask="decl"]').onclick = () => {
+        tasks.push({ name: NAMES[tasks.length % NAMES.length], done: false });
+        render();
+      };
+
+      el('[data-clear="decl"]').onclick = () => {
+        tasks = tasks.filter((t) => !t.done);
+        render(); // counters can't be forgotten — they're derived in render
+      };
+
+      return () => {
+        tasks = [];
+        render();
+      };
+    }
+
+    const resets = [manualPane(), declarativePane()];
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => resets.forEach((r) => r()));
+  }
+</script>

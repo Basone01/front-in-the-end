@@ -1,0 +1,80 @@
+---
+title: Logic outlives views
+description: The code your framework never touches is the code the rewrite never breaks. Keep the rules of your product in plain modules, and let components be the thin layer that wires them to pixels.
+track: thinking
+order: 2
+duration: 11 min
+---
+
+import LogicPort from '../../../components/demos/LogicPort.astro';
+
+Every few years, frontend rewrites itself. jQuery to Backbone, Backbone to Angular, Angular to React, React-with-classes to React-with-hooks, and whatever your company is migrating to as you read this. Each migration produces the same archaeology: engineers excavating *business rules* — pricing, validation, permissions, the actual product — out of component files, where they've fused with the view layer like fossils in rock.
+
+The claim: **most of that pain is optional, because most of the fused code never needed the framework in the first place.** A shipping calculator doesn't need hooks. A validation rule doesn't need a component. The discipline that prevents the fusion is old — the backend has called it layering or hexagonal architecture for decades — and frontend keeps having to relearn it: **business logic in plain modules, components as the thin adapter that wires logic to pixels.**
+
+## Watch a rewrite bounce off
+
+One shipping-cost module, written in 2019. Two complete UIs: the original (dropdowns, a calculate button) and a 2026 redesign (sliders, live results, different everything). And a test panel, running against the module directly:
+
+<LogicPort />
+
+Toggle between the UIs and notice what the toggle *means*: every pixel changed, every interaction pattern changed — and `shipping.js` didn't change, because nothing in it knows what a pixel is. It takes an order description; it returns a number. The tests have the same property: no DOM, no rendering, no framework test-utils — they call a function with values and check values. They ran in 2019's CI, and they'd run unchanged in a Svelte rewrite, a React Native port, or a CLI.
+
+That's the deliverable of this lesson in one image: **the rewrite happened, and the product's actual rules — the part your company would sue to protect — never noticed.**
+
+## The dividing line: does it know about the screen?
+
+The practical test for which side code belongs on takes one question: **does this code need to know that a screen exists?** "Shipping is base-plus-weight, doubled international, capped domestic" — no screen in that sentence. "When the user drags the slider, recompute live" — that's view. The mechanical smell test: if a function mentions an event, an element, or a hook, it's view-side; if you could explain it to the finance department, it's logic.
+
+```js
+// shipping.js — the product. No imports. No framework. No screen.
+export function shippingCost({ weightKg, express, international }) {
+  let cost = 40 + weightKg * 12;
+  if (international) cost = cost * 2.5 + 90;
+  if (express) cost *= 1.8;
+  return Math.round(cost);
+}
+```
+
+```jsx
+// ShippingWidget.jsx — the adapter. Translates pixels ⇄ values. Disposable.
+function ShippingWidget() {
+  const [order, setOrder] = useState({ weightKg: 2, express: false, international: false });
+  return (
+    <form>
+      {/* inputs call setOrder */}
+      <output>{baht(shippingCost(order))}</output>
+    </form>
+  );
+}
+```
+
+Look at the component now: it holds UI state, renders inputs, calls the function. It's *boring* — and that's the design goal. **Components should be the most disposable code in your codebase**, because they're the code with the shortest half-life. When the component is thin, throwing it away costs nothing; when the rules live inside it, throwing it away is a re-derivation project with a bug budget.
+
+This compounds with everything the earlier tracks built. Pure logic plus the state track's "store facts, derive consequences" means your derivations (`cartTotal`, `isEligible`, `validate`) are *exactly* the functions that belong in plain modules. The async track's state machines — what states a fetch passes through, what retries are safe — are logic too; only the spinner is view.
+
+## The honest boundaries
+
+Three places where the line needs judgment rather than dogma, because absolutism here breeds architecture astronauts:
+
+**Some logic is genuinely about presentation.** "Format this date relative to now", "truncate with ellipsis at word boundary", debounce timing — view-side concerns, but still extractable as pure functions. Extract them too; just don't pretend they're business rules. The test suite cares about the distinction less than the org chart does.
+
+**Don't build the layer for code that has no rules.** A settings page that renders fields and PUTs them has nothing to extract — forcing a `settingsLogic.js` with one passthrough function is ceremony. The discipline pays where rules *accumulate*: pricing, validation, permissions, scheduling, anything with edge cases the business argues about. (Rule of three again: the second edge case is when the module earns its file.)
+
+**State managers blur the line — keep your eyes on it.** A Redux reducer or a Zustand store slice is *almost* plain logic, and that's a trap pointing both ways: teams either bury rules in components because "the store handles state", or fuse rules to the store API so deeply that the store migration becomes the rewrite. The move that survives: rules as standalone functions, store actions as one-line callers. The store is an adapter too.
+
+<div class="aside">
+
+**The weekend-port test.** A useful fitness function for any feature: *could a competent engineer port this feature's behavior to a different framework over a weekend, using your tests as the spec?* If yes, your logic is where it belongs. If the answer is "they'd have to read every component to find out what the feature even does" — the components *are* the spec, and specs written in JSX rot at JSX's half-life.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Find your most business-critical component and count the lines that would survive the screen disappearing.** Those lines are logic in costume. Extract the worst offender into a plain module with three unit tests; the component shrinks and the tests get fast.
+2. **Write new rules as functions first, components second.** TDD optional, but "I can test this without rendering anything" is the cheapest architecture review you'll ever run.
+3. **In code review, ask the one question** — "does this code need to know a screen exists?" — when logic shows up inside a handler. It's the review comment that compounds.
+
+---
+
+**The takeaway:** frameworks own state→view; let them own *only* that — product rules go in plain modules with plain tests, components stay thin and disposable, and the next rewrite becomes a re-skinning instead of an excavation. Next lesson: the components themselves — they may be disposable, but their *interfaces* aren't, and designing props like an API is where clean frontend code actually lives.

@@ -1,0 +1,202 @@
+---
+// Thinking lesson 5 exhibit: the knowledge-portfolio sorter. Eight skills,
+// two shelves — the ones that compound and the ones that depreciate.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: sort your knowledge portfolio"
+  reset
+  caption="'Depreciates' doesn't mean worthless — you ship this quarter with framework knowledge. It means it has a half-life, so it can't be the only thing on the shelf. The platform layer is where study time compounds."
+>
+  <div id="shl-root">
+    <p class="prompt">
+      <span class="counter" id="shl-counter"></span>
+      <span id="shl-skill"></span>
+    </p>
+    <div class="options" id="shl-options"></div>
+    <div class="feedback" id="shl-feedback" hidden>
+      <p id="shl-verdict"></p>
+      <p class="why" id="shl-why"></p>
+      <button id="shl-next" type="button">next</button>
+    </div>
+    <div class="done" id="shl-done" hidden>
+      <p id="shl-score"></p>
+    </div>
+  </div>
+</Demo>
+
+<style>
+  #shl-root {
+    max-width: 36rem;
+  }
+
+  .prompt {
+    font-weight: 640;
+    font-size: 1rem;
+    margin: 0 0 0.7rem;
+  }
+
+  .counter {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .options :global(button) {
+    background: var(--bg) !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--line) !important;
+    font-size: 0.85rem !important;
+  }
+
+  .options :global(button:hover) {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+
+  .feedback {
+    margin-top: 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .feedback p {
+    margin: 0 0 0.5rem;
+  }
+
+  .why {
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+  }
+
+  .done p {
+    font-size: 1rem;
+    font-weight: 640;
+  }
+</style>
+
+<script>
+  const SHELVES = ['platform — compounds', 'tool/framework — depreciates'] as const;
+
+  interface Skill {
+    name: string;
+    shelf: (typeof SHELVES)[number];
+    why: string;
+  }
+
+  const SKILLS: Skill[] = [
+    {
+      name: 'How the event loop schedules tasks and microtasks',
+      shelf: 'platform — compounds',
+      why: 'Explains async bugs in every framework you will ever use, including ones not invented yet. Learned once in 2015, still fully valid.',
+    },
+    {
+      name: "React's useEffect dependency rules",
+      shelf: 'tool/framework — depreciates',
+      why: 'Essential this quarter, version-bound forever — React itself has spent years steering people away from effects. The durable layer underneath is "lifecycles and stale closures".',
+    },
+    {
+      name: 'HTTP caching semantics (Cache-Control, ETag, 304)',
+      shelf: 'platform — compounds',
+      why: 'Underneath every CDN, every framework data-loader, every "why is prod serving old JS" incident since the 90s. Compounds across backend work too.',
+    },
+    {
+      name: "Next.js file-routing conventions",
+      shelf: 'tool/framework — depreciates',
+      why: 'Already changed once (pages → app). The durable layer underneath is "URLs map to resources" — which is HTTP knowledge wearing a vendor costume.',
+    },
+    {
+      name: 'Form semantics: labels, validation attributes, submit behavior',
+      shelf: 'platform — compounds',
+      why: 'The browser contract every form library wraps. Knowing it lets you read any form abstraction — and skip the ones that reimplement it badly.',
+    },
+    {
+      name: "Tailwind's utility class names",
+      shelf: 'tool/framework — depreciates',
+      why: 'The durable layer is CSS itself — the box model, cascade, flexbox/grid. Utility names are a dialect; dialects rotate.',
+    },
+    {
+      name: 'CSS layout systems (flexbox, grid, flow)',
+      shelf: 'platform — compounds',
+      why: 'Every styling tool — Tailwind, CSS-in-JS, whatever is next — compiles down to this. The instrument behind the sheet music.',
+    },
+    {
+      name: 'Redux middleware patterns',
+      shelf: 'tool/framework — depreciates',
+      why: 'A decade ago this was the interview. The durable residue — single source of truth, unidirectional data flow — moved into the state track; the middleware API stayed in 2019.',
+    },
+  ];
+
+  const root = document.getElementById('shl-root');
+  if (root) {
+    const counter = document.getElementById('shl-counter') as HTMLElement;
+    const skillEl = document.getElementById('shl-skill') as HTMLElement;
+    const options = document.getElementById('shl-options') as HTMLElement;
+    const feedback = document.getElementById('shl-feedback') as HTMLElement;
+    const verdict = document.getElementById('shl-verdict') as HTMLElement;
+    const why = document.getElementById('shl-why') as HTMLElement;
+    const done = document.getElementById('shl-done') as HTMLElement;
+    const score = document.getElementById('shl-score') as HTMLElement;
+
+    let index = 0;
+    let agreed = 0;
+
+    function show() {
+      if (index >= SKILLS.length) {
+        skillEl.textContent = '';
+        counter.textContent = '';
+        options.innerHTML = '';
+        feedback.hidden = true;
+        done.hidden = false;
+        score.textContent = `${agreed} / ${SKILLS.length} sorted with the key. Portfolio advice: heavy on the compounding shelf, current on the depreciating one.`;
+        return;
+      }
+      const skill = SKILLS[index];
+      done.hidden = true;
+      feedback.hidden = true;
+      counter.textContent = `${index + 1} of ${SKILLS.length}`;
+      skillEl.textContent = `${skill.name} — which shelf?`;
+      options.innerHTML = '';
+      for (const shelf of SHELVES) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = shelf;
+        button.onclick = () => {
+          const right = shelf === skill.shelf;
+          if (right) agreed += 1;
+          verdict.textContent = right ? `✓ Agreed: ${skill.shelf}.` : `The key says: ${skill.shelf}.`;
+          why.textContent = skill.why;
+          feedback.hidden = false;
+          options.innerHTML = '';
+        };
+        options.append(button);
+      }
+    }
+
+    (document.getElementById('shl-next') as HTMLButtonElement).onclick = () => {
+      index += 1;
+      show();
+    };
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      index = 0;
+      agreed = 0;
+      show();
+    });
+
+    show();
+  }
+</script>

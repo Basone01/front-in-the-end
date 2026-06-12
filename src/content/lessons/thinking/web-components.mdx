@@ -1,0 +1,68 @@
+---
+title: "Web components: the component model you already have"
+description: The platform grew its own component system while everyone was watching frameworks. It's not a framework replacement — it's the interop layer, and knowing where it wins is the skill.
+track: thinking
+order: 4
+duration: 12 min
+---
+
+import WebComponentLive from '../../../components/demos/WebComponentLive.astro';
+
+Lesson one argued the platform is the durable layer; this lesson visits its most underexplained feature. While the framework wars raged, the platform quietly shipped a component model of its own: **custom elements** — real, registered, lifecycle-having components that work in plain HTML, need no build step, and (this is the part that matters) work *inside* every framework, because to the framework they're just DOM.
+
+The claim, calibrated carefully because this topic attracts zealots on both sides: **web components are not a framework replacement, and evaluating them as one misses what they are — the only component interface with no expiry date, which makes them the right tool for a specific, valuable set of jobs and the wrong tool for app development.** Knowing which job is in front of you is the lesson.
+
+## A real one, living in this page
+
+`<star-rating>` — defined in this page's script with `customElements.define`, used three times in plain HTML, about thirty lines total. Click around; watch the host page receive ordinary DOM events:
+
+<WebComponentLive />
+
+The skeleton, because seeing it kills the mystique:
+
+```js
+class StarRating extends HTMLElement {
+  static observedAttributes = ['value', 'max'];
+
+  connectedCallback()        { this.render(); /* + listeners */ }   // mounted
+  attributeChangedCallback() { this.render(); }                     // props changed
+
+  render() { /* paint stars from this.value */ }
+}
+customElements.define('star-rating', StarRating);
+```
+
+If you did lesson one's exercise, this is familiar territory: `connectedCallback` is mount, `attributeChangedCallback` is new-props, `render` derives DOM from state — the same lifecycle every framework formalizes, here as a platform API. And the *interface* is the interesting part: attributes in, events out, exactly like `<select>` or `<video>`. The host page above listens with `addEventListener('change', …)` — it neither knows nor cares that this element was hand-written rather than browser-shipped. **A custom element extends HTML's own vocabulary**, and everything that can speak HTML — every framework, every CMS, every static page, every framework not yet invented — speaks to it for free.
+
+(Two pieces deliberately omitted to keep the skeleton honest: **Shadow DOM**, which gives an element private, style-isolated internals — essential for design systems dropped into hostile CSS environments, skippable for elements like this one that want the page's styling; and **form association**, which lets custom inputs participate in real forms. Both are additive, not foundational.)
+
+## Where they win: the boundary-crossing jobs
+
+The pattern in every good web-components story is the same: **the component must outlive, or out-span, any single framework choice.**
+
+- **Design systems in multi-framework organizations.** The enterprise case. Five product teams, three frameworks (because acquisitions), one brand. Build the button/datepicker/modal layer once as custom elements, and every team consumes it natively — versus maintaining three parallel component libraries that drift. This is why Adobe, Microsoft, SAP, and GitHub ship design systems this way.
+- **Embeds and widgets.** A chat bubble, a payment form, a video player dropped into *customers'* pages — you control nothing about the host. A custom element with shadow DOM is self-contained by construction.
+- **Longevity-critical UI.** Government services, documentation, anything with a ten-year horizon. `<star-rating>` will work in 2036's browsers; a component coupled to this year's framework version makes no such promise.
+- **Islands in content sites.** Interactive widgets in mostly-static pages — this site's `read-toggle` and `continue-reading` are custom elements, chosen for exactly this reason: tiny, self-mounting, zero dependencies.
+
+## Where they lose, said plainly
+
+Inside a single-framework app, custom elements compete with the framework's own components and lose on developer experience, and pretending otherwise is advocacy, not engineering. The platform gives you lifecycle and interface — it does *not* give you what frameworks actually sell: declarative templating with efficient updates (you're back to lesson one's render problem, solving it by hand or pulling in a helper like Lit), rich-data flow (attributes are strings; passing objects means properties, which means conventions), or the ecosystem of devtools, testing utilities, and Stack Overflow answers. Server-side rendering of shadow DOM is solved-ish (declarative shadow DOM) but young; framework integration is excellent in Vue/Svelte and merely good in React (fully native only since React 19).
+
+So the honest decision rule: **building an app inside one framework → use the framework's components. Building UI that must cross framework borders, or outlive them → custom elements are the only tool actually designed for the job.** Most engineers never get told the second category exists; now you know what it looks like when it walks into a planning meeting.
+
+<div class="aside">
+
+**The deeper takeaway is the interface, not the technology.** Notice what made `<star-rating>` portable: a small, stringly, evented contract — attributes in, events out, no shared memory with the host. That's lesson three's discipline (a minimal expressible surface) plus lesson two's (logic behind a boundary). You can build *framework components* with the same property — props in, callbacks out, no reaching into parents — and they'll port across rewrites almost as well. Web components just make the discipline mandatory. The platform, as usual, is also a teacher.
+
+</div>
+
+## How to apply this on Monday
+
+1. **Build one.** A `<copy-button>` or `<relative-time>` for your project — thirty lines, no build step. Like lesson one's exercise, it permanently demotes a technology from belief to tool.
+2. **Audit your widget boundary.** Anything your team ships into pages you don't control (embeds, CMS snippets, marketing pages) is the canonical use case — if it's currently a React bundle with mount instructions, a custom element would delete the instructions.
+3. **If you're in a multi-framework org, raise the design-system question** with the decision rule above. It's a million-baht architecture decision that usually gets made by default instead of on purpose.
+
+---
+
+**The takeaway:** custom elements are HTML's own component model — attributes in, events out, no expiry date — the right answer for design systems that cross frameworks, embeds that cross sites, and UI that must outlive the current stack, and the wrong answer for single-framework app guts. One lesson left in the track: zooming out from code to career — which knowledge compounds, which depreciates, and how to read the next shiny thing's price tag at a glance.

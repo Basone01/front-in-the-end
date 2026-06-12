@@ -1,0 +1,66 @@
+---
+title: Make impossible states impossible
+description: Clean frontend code isn't about line counts — it's about interfaces that can't express nonsense. Every boolean prop doubles your states; most of the new ones are garbage.
+track: thinking
+order: 3
+duration: 11 min
+---
+
+import ImpossibleStates from '../../../components/demos/ImpossibleStates.astro';
+
+"Clean code" advice tends to arrive as etiquette — naming conventions, function lengths, comment hygiene. Fine, but none of it explains why one codebase feels solid and another feels haunted. This lesson is about the structural version of clean, the one with theorems behind it: **design interfaces so that invalid states have no representation.** Not "are checked for". Not "are documented as unsupported". *Cannot be written down.*
+
+You've met this principle twice without its name. The state track's "derive, don't store" made *stale* states unrepresentable — no second copy, no disagreement. Lesson two of that track did it for *conflicting* states — one home, no contradiction. Now apply it to the interfaces you design every day: component props, function arguments, state shapes. Because the most common way frontend codebases rot is not bad algorithms — it's **interfaces that can express more states than the product has**, and the gap between those two numbers is where bugs live.
+
+## The boolean button
+
+Every design system has one: the Button that grew. It started with `primary`. Then marketing needed `danger`. Then `ghost`, `small`, `large`, `loading`, `disabled` — each one a reasonable PR, each one a boolean, each one **doubling** the component's state space. Seven flags in, the Button has 128 representable states. The design team has drawn perhaps a dozen buttons. Try to find the other 116:
+
+<ImpossibleStates />
+
+`primary` + `danger`: which background wins? The component renders *something* — CSS specificity decides, which means a refactor that reorders rules changes the answer silently. `small` + `large`: a contradiction wearing a render. `loading` + `disabled`: is it busy or off? Every one of these is a state the designer never drew, the developer never intended, and the type system happily accepts — `<Button primary danger small large />` compiles clean.
+
+And someone *will* write it. Not maliciously: a feature flag flips `danger` on while a refactor flips `primary` on, two PRs apart, neither author seeing the other. **When the interface can express nonsense, expressing nonsense becomes a matter of time, not discipline.** Runtime warnings and lint rules are guards stationed around a hole; the right-hand pane just doesn't dig the hole: `variant` is one value *because the design is one value* — a button has exactly one visual identity, one size, one status. Three enums, 24 states, all of them buttons someone designed. The invalid combinations didn't get banned; they stopped existing.
+
+## The same theorem, three more places it pays
+
+**State shapes.** The async track's fetch machine was this principle in disguise:
+
+```ts
+// Can express: loading-with-error, error-with-data-and-no-error-object…
+{ isLoading: boolean; error: Error | null; data: Data | null }
+
+// Can express: exactly the four states that exist
+| { status: 'idle' }
+| { status: 'loading' }
+| { status: 'error'; error: Error }
+| { status: 'success'; data: Data }
+```
+
+The first shape has 8 combinations for 4 realities; every consumer must privately decide what `isLoading && error` means, and they'll decide differently. The second makes the question unaskable — and notice the bonus: `data` *only exists* in success, so "forgot to check before using" becomes a type error instead of a Tuesday incident.
+
+**Function signatures.** `showModal(title, true, false, null, true)` — five positional flags is 32 states and a memory quiz. An options object with enums is the same fix at function scale.
+
+**Component children.** A `Card` that accepts `title`, `subtitle`, `image`, `imagePosition`, `compact`… is re-growing the boolean button in layout form. Slots/composition (`<Card><CardImage/><CardTitle/></Card>`) often dissolves the combinatorics: the valid arrangements become the expressible ones.
+
+<div class="aside">
+
+**Why this is the real "clean code".** Compare two review comments: "rename `handleClick2`" versus "this interface can express 116 buttons we don't have". The first improves reading; the second deletes future bugs *and* future meetings — every impossible state is an edge case nobody has to discuss, test, or document ever again. Etiquette polishes code; constraint design removes work. When time is short, spend it on the second.
+
+</div>
+
+## The migration honesty section
+
+You have a boolean button in production right now; here's the path that doesn't require a flag day. Add the enum prop alongside the booleans (`variant="primary"`), map old flags to it internally with a deprecation warning, codemod the easy call-sites (mechanical: `primary` → `variant="primary"`), and let the type system flag the contradictory holdouts — those few call-sites *are* the bugs this lesson predicted; fixing them is the migration's profit, not its cost.
+
+And a boundary, because every principle needs one: don't enum-ify what's genuinely independent. `disabled` alongside `variant` is fine — disabled-ness truly crosses all variants; forcing it into the enum (`primaryDisabled`, `dangerDisabled`…) is the inverse disease, multiplying states to *avoid* a boolean. The test is the design language itself: **independent axes get independent props; mutually exclusive choices get one prop.** The interface should be shaped like the truth.
+
+## How to apply this on Monday
+
+1. **Count one component's states.** Multiply its prop domains (booleans count 2). Compare against how many variants design actually has. A ratio over ~3:1 is a refactor candidate — and the ratio is a great, non-confrontational number to put in the PR description.
+2. **When adding a prop, ask the axis question:** is this a new independent axis, or a new value on an existing one? Most "add a boolean" PRs are secretly the second, and one `variant` value cheaper.
+3. **Reach for tagged unions whenever two fields can contradict.** `status + data` beats `isX + maybeY` everywhere it appears — fetches, forms, wizards, connection state.
+
+---
+
+**The takeaway:** every interface defines a space of expressible states, bugs live in the gap between that space and reality, and the cleanest code is the code where the gap is zero — enums over boolean piles, tagged unions over flag soup, composition over prop combinatorics. Next lesson: the platform's own component model — custom elements, the one component interface that outlives every framework that wraps it.

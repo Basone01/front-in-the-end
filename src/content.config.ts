@@ -6,7 +6,7 @@ const lessons = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string(),
-    track: z.enum(['rendering', 'state', 'async']),
+    track: z.enum(['rendering', 'state', 'async', 'thinking']),
     order: z.number(),
     duration: z.string(),
     draft: z.boolean().default(false),

@@ -1,0 +1,73 @@
+---
+title: The platform beneath the framework
+description: A framework is an opinion about the platform, not a replacement for it. Build the 20-line version once and every framework you ever meet becomes legible.
+track: thinking
+order: 1
+duration: 11 min
+---
+
+import TinyFramework from '../../../components/demos/TinyFramework.astro';
+
+The first three tracks taught specific judgment calls — rendering, state, async. This track teaches the thing underneath the calls: **how to keep being good at frontend while frontend keeps changing.** And it starts with the single most de-mystifying exercise in the field: figuring out what a framework actually *is*.
+
+Here's the claim, which sounds deflationary and is meant to be: **a frontend framework is an opinion about one problem — how to keep the DOM in sync with your data — plus a large amount of excellent engineering applied to that opinion's performance.** It is not a new platform. It runs on the same DOM, the same events, the same fetch and URL and forms that this site has been using raw in every demo. Engineers who know the platform read frameworks the way musicians read sheet music: as notation over something they already understand. Engineers who only know the framework are memorizing fingerings.
+
+## The problem every framework solves
+
+You've already met the problem twice on this site, in costume. The rendering track's lesson two showed JavaScript taking ownership of the DOM; the state track's lesson one showed stored values drifting from their source. Put them together and you get *the* problem: **when JavaScript owns the UI, the DOM becomes a second copy of your state** — and lesson two of the state track told you exactly what second copies do.
+
+Watch it happen at the DOM level. Same task app, twice. The left pane updates the DOM by hand: every handler must remember every on-screen read-out of the data. The right pane does what every framework does instead. Add tasks, complete a few, then hit "clear completed" in both:
+
+<TinyFramework />
+
+The manual pane's bug should feel familiar — it's the stored-vs-derived cart again, except the stale copy is *pixels*. The add handler remembers the open-counter; the toggle handler remembers both counters; the clear handler, written on a Friday, forgets the done-counter. Nothing crashes. The page just quietly disagrees with itself, and the invisible contract — "every handler updates every affected element" — grows quadratically: ten interactive elements times ten handlers is a hundred chances to forget.
+
+## The 20-line framework
+
+The right pane's entire technology:
+
+```js
+let state = { tasks: [] };
+
+function render() {
+  list.innerHTML = '';
+  for (const task of state.tasks) { /* build each row from state */ }
+  openCount.textContent  = state.tasks.filter(t => !t.done).length;
+  doneCount.textContent  = state.tasks.filter(t =>  t.done).length;
+}
+
+function update(fn) {
+  fn(state);     // change the data
+  render();      // redraw everything from it
+}
+```
+
+That's the whole idea: **stop updating the DOM; update the data, and rebuild the DOM from the data.** The screen becomes a *derivation* of state — the state track's central move, applied to pixels. Handlers shrink to pure intent (`update(s => s.tasks.push(…))`); the "remember every read-out" contract evaporates, because render *is* the memory.
+
+Now the de-mystification pays out. This 20-line version has an obvious flaw: rebuilding everything on every change is wasteful, wrecks focus and selection, and chokes at scale. **Every famous framework feature is an answer to that flaw:** React's virtual DOM diffs the cheap description and patches only changes; Svelte's compiler pre-computes which keystroke touches which node; Vue and Solid's reactivity tracks reads so updates skip straight to the affected spots; keys exist so list diffs don't confuse reordering with rewriting; hooks and signals are bookkeeping for "which state belongs to which piece of render". Different bets, same problem — *make `state → UI` true without paying full rebuild price.* Read any framework's docs with that sentence in hand and the table of contents reorganizes itself from magic into engineering.
+
+<div class="aside">
+
+**This is not a "frameworks are unnecessary" lesson.** The 20 lines genuinely don't scale — that's precisely why thousands of engineer-years went into the real ones, and why you should use one for app-shaped work (the rendering track already priced this). The point is different: *what you're buying is automation of a problem you can state in one sentence.* Knowing the sentence is what lets you evaluate the products — and debug them when the automation leaks.
+
+</div>
+
+## Why platform knowledge is the durable layer
+
+The practical payoff of the platform-first view, itemized:
+
+- **Debugging through the abstraction.** When hydration mismatches, when a synthetic event doesn't fire, when focus vanishes after a re-render — the explanation is always in DOM terms. Framework-only engineers hit these and file issues; platform engineers read them.
+- **Knowing what's already free.** Every track so far had this move: `<details>`, form validation, URL state, HTTP caching. The platform ships features; frameworks wrap them. The wrapper is sometimes worth it — but you can only judge "worth it" if you know the unwrapped price, which is sometimes zero.
+- **Transfer.** React's `useState`, Vue's `ref`, Svelte's runes: three syntaxes for "state whose change should re-derive UI" — a concept you now have from twenty lines of vanilla. Learning your *second* framework takes a week when you have the concept and a year when you have only the first framework's syntax.
+
+That last point is this track's whole trajectory, and lesson five makes it a career strategy. But first, the next lesson takes this lesson's separation — data here, DOM there — and pushes it further: if the framework's job is syncing state to view, then your *business logic* doesn't need the framework at all. Code the framework never touches is code the rewrite never breaks.
+
+## How to apply this on Monday
+
+1. **Do the exercise for real, once.** A todo app, vanilla JS, the state→render pattern, no peeking. Two hours. It permanently changes how framework docs read.
+2. **Next time the framework surprises you, translate the question to platform terms** — "what would this be in raw DOM?" The surprise usually dissolves; what's left is the framework's actual opinion, now visible.
+3. **In interviews and design reviews, ask candidates and yourself the one-sentence question:** "what problem does the framework solve?" The answers you'll hear — "it makes UIs faster", "it organizes code" — are a fog index. The real sentence fits on a sticky note.
+
+---
+
+**The takeaway:** frameworks automate one sentence — keep the DOM derived from state, efficiently — and everything else is engineering around that bet. Learn the sentence in the raw, and frameworks stop being beliefs and become tools with legible price tags. Next: the corollary — if the framework's territory is state→view, your logic can live outside that territory entirely, where rewrites can't reach it.

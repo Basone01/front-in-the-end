@@ -1,0 +1,187 @@
+---
+// Thinking lesson 3 exhibit: the same Button component with two APIs. Seven
+// boolean props compose into nonsense; three enums can't. The math is the
+// argument: count the representable states, then count the valid ones.
+import Demo from '../Demo.astro';
+---
+
+<Demo
+  title="exhibit: the boolean button"
+  reset
+  caption="Turn on primary and danger together, or small and large. The boolean API happily renders the contradiction — every new flag doubles the states and most of the new ones are garbage. The enum API has exactly as many states as the design has buttons."
+>
+  <div id="ist-root" class="cols">
+    <section class="pane">
+      <div class="pane-chrome">7 boolean props · <strong>128</strong> states</div>
+      <div class="pane-screen">
+        <p class="flags" id="ist-flags">
+          {
+            ['primary', 'danger', 'ghost', 'small', 'large', 'loading', 'disabled'].map((flag) => (
+              <label>
+                <input type="checkbox" data-flag={flag} /> {flag}
+              </label>
+            ))
+          }
+        </p>
+        <p class="stage"><button class="bb" id="ist-bool-btn" type="button">Submit</button></p>
+        <p class="verdict" id="ist-bool-verdict"></p>
+      </div>
+    </section>
+
+    <section class="pane">
+      <div class="pane-chrome">3 enum props · <strong>24</strong> states</div>
+      <div class="pane-screen">
+        <p class="flags">
+          <label>variant
+            <select id="ist-variant">
+              <option>default</option><option>primary</option><option>danger</option><option>ghost</option>
+            </select>
+          </label>
+          <label>size
+            <select id="ist-size">
+              <option>small</option><option selected>medium</option><option>large</option>
+            </select>
+          </label>
+          <label>status
+            <select id="ist-status">
+              <option selected>idle</option><option>loading</option>
+            </select>
+          </label>
+        </p>
+        <p class="stage"><button class="eb" id="ist-enum-btn" type="button">Submit</button></p>
+        <p class="verdict ok-line">every combination is a real button ✓</p>
+      </div>
+    </section>
+  </div>
+</Demo>
+
+<style>
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+    gap: 0.9rem;
+  }
+
+  .flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.9rem;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    margin: 0 0 0.8rem;
+  }
+
+  .flags label {
+    display: inline-flex;
+    gap: 0.3rem;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .flags select {
+    font: inherit;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    margin-left: 0.2rem;
+  }
+
+  .stage {
+    margin: 0 0 0.6rem;
+  }
+
+  /* The boolean button: classes pile up and fight. Deliberately. */
+  .bb,
+  .eb {
+    transition: none;
+  }
+
+  .bb.primary { background: var(--accent) !important; color: #fff !important; }
+  .bb.danger  { background: #b91c1c !important; color: #fff !important; }
+  .bb.primary.danger {
+    background: linear-gradient(90deg, var(--accent) 50%, #b91c1c 50%) !important;
+    text-decoration: line-through wavy;
+  }
+  .bb.ghost { background: none !important; border: 1px solid var(--line) !important; color: var(--ink) !important; }
+  .bb.primary.ghost, .bb.danger.ghost { opacity: 0.5; filter: blur(0.4px); }
+  .bb.small { font-size: 0.7rem !important; padding: 0.2rem 0.5rem !important; }
+  .bb.large { font-size: 1.1rem !important; padding: 0.55rem 1.3rem !important; }
+  .bb.small.large { transform: skew(-8deg) scale(0.9, 1.3); }
+  .bb.loading::after { content: ' ⟳'; }
+  .bb.disabled { opacity: 0.45; }
+  .bb.loading.disabled::after { content: ' ⟳?'; }
+
+  /* The enum button: every state designed once. */
+  .eb[data-variant='primary'] { background: var(--accent) !important; color: #fff !important; }
+  .eb[data-variant='danger']  { background: #b91c1c !important; color: #fff !important; }
+  .eb[data-variant='ghost']   { background: none !important; border: 1px solid var(--line) !important; color: var(--ink) !important; }
+  .eb[data-size='small'] { font-size: 0.7rem !important; padding: 0.2rem 0.5rem !important; }
+  .eb[data-size='large'] { font-size: 1.1rem !important; padding: 0.55rem 1.3rem !important; }
+  .eb[data-status='loading'] { opacity: 0.75; }
+  .eb[data-status='loading']::after { content: ' ⟳'; }
+
+  .verdict {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: #c33;
+    margin: 0;
+    min-height: 2.4em;
+  }
+
+  .verdict.ok-line {
+    color: var(--ok);
+  }
+</style>
+
+<script>
+  const root = document.getElementById('ist-root');
+  if (root) {
+    const boolBtn = document.getElementById('ist-bool-btn') as HTMLButtonElement;
+    const verdict = document.getElementById('ist-bool-verdict') as HTMLElement;
+    const flags = [...root.querySelectorAll<HTMLInputElement>('[data-flag]')];
+
+    const CONFLICTS: [string, string, string][] = [
+      ['primary', 'danger', 'two backgrounds fighting'],
+      ['primary', 'ghost', 'filled and transparent at once'],
+      ['danger', 'ghost', 'filled and transparent at once'],
+      ['small', 'large', 'two sizes at once'],
+      ['loading', 'disabled', 'is it busy or off? nobody knows'],
+    ];
+
+    function paintBool() {
+      boolBtn.className = 'bb ' + flags.filter((f) => f.checked).map((f) => f.dataset.flag).join(' ');
+      const active = new Set(flags.filter((f) => f.checked).map((f) => f.dataset.flag));
+      const hits = CONFLICTS.filter(([a, b]) => active.has(a) && active.has(b));
+      verdict.textContent = hits.length
+        ? hits.map(([a, b, why]) => `${a}+${b}: ${why}`).join(' · ')
+        : 'this combination happens to be fine (33 of 128 are)';
+      verdict.style.color = hits.length ? '#c33' : 'var(--ink-faint)';
+    }
+    flags.forEach((flag) => flag.addEventListener('change', paintBool));
+    paintBool();
+
+    const enumBtn = document.getElementById('ist-enum-btn') as HTMLButtonElement;
+    const selects = {
+      variant: document.getElementById('ist-variant') as HTMLSelectElement,
+      size: document.getElementById('ist-size') as HTMLSelectElement,
+      status: document.getElementById('ist-status') as HTMLSelectElement,
+    };
+    function paintEnum() {
+      enumBtn.dataset.variant = selects.variant.value;
+      enumBtn.dataset.size = selects.size.value;
+      enumBtn.dataset.status = selects.status.value;
+    }
+    Object.values(selects).forEach((select) => select.addEventListener('change', paintEnum));
+    paintEnum();
+
+    root.closest('[data-demo]')?.addEventListener('demo-reset', () => {
+      flags.forEach((flag) => (flag.checked = false));
+      selects.variant.value = 'default';
+      selects.size.value = 'medium';
+      selects.status.value = 'idle';
+      paintBool();
+      paintEnum();
+    });
+  }
+</script>
