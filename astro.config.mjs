@@ -3,8 +3,7 @@ import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  // Placeholder until the real domain is purchased.
-  site: 'https://front-in-the-end.pages.dev',
+  site: 'https://front-in-the-end.basone01.com',
   integrations: [mdx(), sitemap()],
   markdown: {
     shikiConfig: {
