@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Front in the End — the deck</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/monokai.css"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400;1,7..72,600&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --r-background-color: #181511;
+        --bg: #181511;
+        --panel: #211d18;
+        --ink: #e9e2d4;
+        --soft: #a89f8d;
+        --faint: #756d5d;
+        --line: #363026;
+        --accent: #f97839;
+        --ok: #5cb583;
+        --prose: 'Literata', Georgia, serif;
+        --mono: 'JetBrains Mono', ui-monospace, monospace;
+      }
+
+      html,
+      body,
+      .reveal-viewport,
+      .reveal {
+        background-color: var(--bg) !important;
+      }
+
+      .reveal {
+        font-family: var(--prose);
+        font-weight: 420;
+        color: var(--ink);
+        font-size: 30px;
+      }
+
+      .reveal .slides {
+        text-align: left;
+      }
+
+      .reveal h1,
+      .reveal h2,
+      .reveal h3 {
+        font-family: var(--prose);
+        font-weight: 640;
+        letter-spacing: -0.015em;
+        line-height: 1.12;
+        text-transform: none;
+        color: var(--ink);
+        margin: 0 0 0.4em;
+      }
+
+      .reveal em {
+        color: var(--accent);
+        font-style: italic;
+      }
+
+      .reveal ::selection {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      /* ---- shared bits ---- */
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 0.5em;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 0.9em;
+      }
+
+      .soft {
+        color: var(--soft);
+        font-style: italic;
+        max-width: 24ch;
+      }
+
+      .lede {
+        color: var(--soft);
+        max-width: 30ch;
+        font-size: 0.82em;
+      }
+
+      .hint {
+        margin-top: 1.8em;
+        font-family: var(--mono);
+        font-size: 0.42em;
+        color: var(--faint);
+        letter-spacing: 0.08em;
+      }
+
+      /* ---- title slide ---- */
+      .wordmark {
+        font-size: 2.1em;
+        font-weight: 700;
+        font-style: italic;
+        line-height: 1;
+      }
+      .wordmark em {
+        font-style: italic;
+      }
+
+      /* ---- thesis / closing big lines ---- */
+      .big {
+        font-size: 1.7em;
+        line-height: 1.08;
+      }
+
+      /* ---- agenda ---- */
+      .agenda {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        counter-reset: a;
+      }
+      .agenda li {
+        counter-increment: a;
+        display: grid;
+        grid-template-columns: 1.6em 1fr;
+        gap: 0.7em;
+        padding: 0.42em 0;
+        border-top: 1px solid var(--line);
+        align-items: baseline;
+      }
+      .agenda li::before {
+        content: '0' counter(a);
+        font-family: var(--mono);
+        font-size: 0.5em;
+        color: var(--accent);
+      }
+      .agenda b {
+        font-weight: 640;
+      }
+      .agenda span {
+        display: block;
+        color: var(--soft);
+        font-size: 0.62em;
+        font-style: italic;
+        margin-top: 0.15em;
+      }
+
+      /* ---- track divider ---- */
+      .bignum {
+        font-family: var(--prose);
+        font-size: 4.2em;
+        font-style: italic;
+        font-weight: 400;
+        color: var(--accent);
+        line-height: 0.9;
+        margin-bottom: 0.1em;
+      }
+
+      /* ---- lesson slide ---- */
+      .lessonnum {
+        position: absolute;
+        top: 8%;
+        right: 4%;
+        font-family: var(--prose);
+        font-style: italic;
+        font-weight: 400;
+        font-size: 2.4em;
+        color: var(--line);
+      }
+      .thesis {
+        font-size: 1.0em;
+        max-width: 26ch;
+        margin: 0.2em 0 0.9em;
+      }
+      .demo {
+        font-family: var(--mono);
+        font-size: 0.5em;
+        color: var(--soft);
+        border-left: 2px solid var(--accent);
+        padding-left: 0.8em;
+        max-width: 40ch;
+      }
+      .demo b {
+        color: var(--accent);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-right: 0.6em;
+      }
+
+      /* ---- lesson slide with an embedded live demo ---- */
+      .lesson-demo {
+        display: grid;
+        grid-template-columns: 0.78fr 1.22fr;
+        gap: 1.1em;
+        align-items: center;
+        height: 100%;
+      }
+      .col-text .eyebrow {
+        margin-bottom: 0.6em;
+      }
+      .col-text h3 {
+        font-size: 1.15em;
+      }
+      .col-text .thesis {
+        font-size: 0.74em;
+        max-width: none;
+        color: var(--soft);
+      }
+      .livehint {
+        font-family: var(--mono);
+        font-size: 0.42em;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-top: 1.1em;
+      }
+      .col-demo {
+        height: 100%;
+        display: flex;
+        align-items: center;
+      }
+      .col-demo iframe {
+        width: 100%;
+        height: 600px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+      }
+
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.5em;
+        color: var(--faint);
+      }
+
+      .reveal .progress {
+        color: var(--accent);
+      }
+      .reveal .controls {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides" id="slides"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+    <script>
+      // The deck is served as a site route (/presentation/), so the demos at
+      // /embed/<slug>/ live on the same origin. A root-relative path needs no
+      // host config and works identically in local dev and production.
+      const EMBED_BASE = '';
+
+      // Demo slug per track, in lesson order — points at /embed/<slug>/.
+      const SLUGS = [
+        ['document-app', 'sprinkle-vs-widget', 'mpa-vs-spa', 'first-paint-race', 'decision-tree'],
+        ['stored-vs-derived', 'sync-or-lift', 'state-homes', 'stale-cache', 'state-quiz'],
+        ['fetch-states', 'typeahead-race', 'wasted-work', 'optimistic-like', 'double-submit'],
+        ['tiny-framework', 'logic-port', 'impossible-states', 'web-component-live', 'skill-half-life'],
+      ];
+
+      // ---- the curriculum, distilled to one slide per lesson ----------
+      const TRACKS = [
+        {
+          n: '01',
+          title: 'How we render the web',
+          tag: 'Every rendering strategy exists because the last one hit a wall.',
+          lessons: [
+            {
+              t: 'The document is enough',
+              thesis:
+                'The document architecture is a complete app model with one copy of the truth. Modern frontend bugs are the price of abandoning it.',
+              demo: 'a working coffee-subscription app with zero JavaScript',
+            },
+            {
+              t: 'Enhancement vs takeover',
+              thesis:
+                'The dividing line is who owns the DOM, not how much JS you write. The document owns what it can represent; JS owns what it can’t.',
+              demo: 'the same feature as a sprinkle vs a widget — with JS set to “fail to load”',
+            },
+            {
+              t: 'The SPA bargain',
+              thesis:
+                'A SPA trades the browser’s free features for statefulness. Good for long, dense, logged-in sessions; bad for short or content-shaped ones.',
+              demo: 'MPA vs SPA navigation, side by side, under a latency slider',
+            },
+            {
+              t: 'SSR & hydration',
+              thesis:
+                'SSR re-attaches the document’s strengths to the SPA; hydration is the double-render bill. Islands and server components shrink it.',
+              demo: 'the first-paint race — click the button during the “uncanny valley”',
+            },
+            {
+              t: 'Choosing a strategy',
+              thesis:
+                'Content or app, strangers or regulars, short or long sessions — answer per surface and the strategy chooses itself. Use the least powerful that fits.',
+              demo: 'a clickable decision tree with six verdicts',
+            },
+          ],
+        },
+        {
+          n: '02',
+          title: 'State & source of truth',
+          tag: 'Most UI bugs are two copies of the truth disagreeing.',
+          lessons: [
+            {
+              t: 'State vs derived',
+              thesis:
+                'State is what you can’t recompute. Storing a derivation hires you for a sync job with invisible duties. Store the minimum, derive the rest.',
+              demo: 'a cart whose stored total drifts from its items',
+            },
+            {
+              t: 'Single source of truth',
+              thesis:
+                'Every duplicated fact carries an invisible sync rule someone will break. One fact, one home, everyone else reads.',
+              demo: 'a tab bar whose remote control goes stale until you lift the state',
+            },
+            {
+              t: 'Where state lives',
+              thesis:
+                'Placement answers lifetime, reach, and shareability. As close as possible, as durable as required — and give the URL what’s URL-shaped.',
+              demo: 'a filter that survives refresh and sharing only when it lives in the URL',
+            },
+            {
+              t: 'Server state is a cache',
+              thesis:
+                'Server data in the client is a cache: keyed, aging from the moment it arrives, and in need of invalidation on every write.',
+              demo: 'a stale header healed by cache invalidation',
+            },
+            {
+              t: 'Designing a feature’s state',
+              thesis:
+                'Four questions per fact: real state or derived? ours or the server’s? which rung of the ladder? who writes it?',
+              demo: 'a “where should it live?” quiz that argues back',
+            },
+          ],
+        },
+        {
+          n: '03',
+          title: 'Async & race conditions',
+          tag: 'Requests finish out of order, users click twice, networks lie.',
+          lessons: [
+            {
+              t: 'The network is your UI',
+              thesis:
+                'A fetch has four states — idle, loading, success, error — and all four ship whether you designed them or not. The undesigned ones render as blankness and lies.',
+              demo: 'the four states of a fetch, with failure cranked up',
+            },
+            {
+              t: 'Race conditions',
+              thesis:
+                'The network reorders responses; naive handlers apply arrival order. Stamp each request, drop the stale ones.',
+              demo: 'a typeahead that shows results for “ban” under a box reading “bangkok”',
+            },
+            {
+              t: 'Cancellation & debounce',
+              thesis:
+                'The race guard protects the screen; debounce and abort protect the budget. Decline doomed work, revoke superseded work.',
+              demo: 'wasted-work meters: fire-everything vs debounce vs debounce+abort',
+            },
+            {
+              t: 'Optimistic updates',
+              thesis:
+                'A loan against the server’s answer. Borrow only against likely yeses, hold an exact snapshot, and apologize where the user will see it.',
+              demo: 'optimistic vs pessimistic like buttons against a flaky server',
+            },
+            {
+              t: 'Failing honestly',
+              thesis:
+                'The deepest failure is ambiguity: did it happen? You can’t prevent repeats, so make them harmless — give operations idempotency keys.',
+              demo: 'the impatient user: $147 naively, $49 with an idempotency key',
+            },
+          ],
+        },
+        {
+          n: '04',
+          title: 'Thinking in frontend',
+          tag: 'The skills that survive the next framework.',
+          lessons: [
+            {
+              t: 'The platform beneath',
+              thesis:
+                'A framework automates one sentence — keep the DOM derived from state, efficiently. Learn the raw version and every framework becomes legible.',
+              demo: 'a framework in 20 lines: manual DOM edits vs state → render()',
+            },
+            {
+              t: 'Logic outlives views',
+              thesis:
+                'Code the framework never touches is code the rewrite never breaks. Rules in plain modules; components stay thin and disposable.',
+              demo: 'one shipping module, two UIs a redesign apart, the same passing tests',
+            },
+            {
+              t: 'Impossible states',
+              thesis:
+                'Bugs live in the gap between expressible states and real ones. Enums over boolean piles; tagged unions over flag soup.',
+              demo: 'a 7-boolean button (128 states) vs a 3-enum one (all valid)',
+            },
+            {
+              t: 'Web components',
+              thesis:
+                'HTML’s own component model — attributes in, events out, no expiry date. Right for cross-framework design systems, embeds, and longevity.',
+              demo: 'a live <star-rating> custom element, defined in ~30 lines',
+            },
+            {
+              t: 'Surviving the churn',
+              thesis:
+                'Two shelves: platform knowledge compounds, tool knowledge depreciates. Extract the durable 20%, and read each new tool’s price tag.',
+              demo: 'a knowledge-portfolio sorter: compounds vs depreciates',
+            },
+          ],
+        },
+      ];
+
+      // ---- build the slides -------------------------------------------
+      const esc = (s) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      function lessonSlide(track, lesson, i, ti) {
+        const slug = SLUGS[ti][i];
+        return `
+          <section>
+            <div class="lesson-demo">
+              <div class="col-text">
+                <p class="eyebrow">${track.title} · lesson ${i + 1}</p>
+                <h3>${lesson.t}</h3>
+                <p class="thesis">${lesson.thesis}</p>
+                <p class="livehint">↘ live demo — poke it</p>
+              </div>
+              <div class="col-demo">
+                <iframe data-src="${EMBED_BASE}/embed/${slug}/" title="${esc(lesson.t)} demo"></iframe>
+              </div>
+            </div>
+          </section>`;
+      }
+
+      function trackStack(track, ti) {
+        const intro = `
+          <section>
+            <div class="bignum">${track.n}</div>
+            <h2>${track.title}</h2>
+            <p class="soft">${track.tag}</p>
+            <p class="hint">↓ five lessons</p>
+          </section>`;
+        const lessons = track.lessons.map((l, i) => lessonSlide(track, l, i, ti)).join('');
+        return `<section>${intro}${lessons}</section>`;
+      }
+
+      const title = `
+        <section data-auto-animate>
+          <p class="eyebrow">a lesson site · with demos you can poke</p>
+          <h1 class="wordmark">front <em>in the</em> end</h1>
+          <p class="lede">Thinking like a frontend engineer — four tracks, twenty lessons, twenty interactive demos.</p>
+          <p class="hint">→ / space to advance · ↓ to dive into a track · esc for the grid</p>
+        </section>`;
+
+      const thesis = `
+        <section data-auto-animate>
+          <h2 class="big">Frameworks change.<br /><em>The reasons don’t.</em></h2>
+          <p class="soft">Every layer of frontend exists to get past a wall the previous one hit. Learn the walls; the tools rotate.</p>
+        </section>`;
+
+      const agenda = `
+        <section>
+          <p class="eyebrow">the curriculum</p>
+          <ol class="agenda">
+            ${TRACKS.map(
+              (t) => `<li><div><b>${t.title}</b><span>${t.tag}</span></div></li>`
+            ).join('')}
+          </ol>
+        </section>`;
+
+      const closing = `
+        <section>
+          <h2 class="big">Use the least powerful<br />tool that <em>fits</em>.</h2>
+          <p class="soft">…and be able to say, out loud, what the powerful one costs.</p>
+          <p class="mono">github.com/Basone01/front-in-the-end</p>
+        </section>`;
+
+      document.getElementById('slides').innerHTML =
+        title + thesis + agenda + TRACKS.map((t, i) => trackStack(t, i)).join('') + closing;
+
+      // ---- go ----------------------------------------------------------
+      Reveal.initialize({
+        hash: true,
+        transition: 'fade',
+        backgroundTransition: 'fade',
+        controls: true,
+        progress: true,
+        slideNumber: 'c/t',
+        center: false,
+        margin: 0.1,
+        width: 1100,
+        height: 700,
+      });
+    </script>
+  </body>
+</html>

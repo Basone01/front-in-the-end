@@ -1,0 +1,102 @@
+---
+// Bare single-demo pages, one per interactive exhibit, for embedding in the
+// slide deck (or anywhere) via <iframe>. These reuse the exact same demo
+// components the lessons use — no duplication, no drift.
+import '../../styles/global.css';
+
+import DocumentApp from '../../components/demos/DocumentApp.astro';
+import SprinkleVsWidget from '../../components/demos/SprinkleVsWidget.astro';
+import MpaVsSpa from '../../components/demos/MpaVsSpa.astro';
+import FirstPaintRace from '../../components/demos/FirstPaintRace.astro';
+import DecisionTree from '../../components/demos/DecisionTree.astro';
+import StoredVsDerived from '../../components/demos/StoredVsDerived.astro';
+import SyncOrLift from '../../components/demos/SyncOrLift.astro';
+import StateHomes from '../../components/demos/StateHomes.astro';
+import StaleCache from '../../components/demos/StaleCache.astro';
+import StateQuiz from '../../components/demos/StateQuiz.astro';
+import FetchStates from '../../components/demos/FetchStates.astro';
+import TypeaheadRace from '../../components/demos/TypeaheadRace.astro';
+import WastedWork from '../../components/demos/WastedWork.astro';
+import OptimisticLike from '../../components/demos/OptimisticLike.astro';
+import DoubleSubmit from '../../components/demos/DoubleSubmit.astro';
+import TinyFramework from '../../components/demos/TinyFramework.astro';
+import LogicPort from '../../components/demos/LogicPort.astro';
+import ImpossibleStates from '../../components/demos/ImpossibleStates.astro';
+import WebComponentLive from '../../components/demos/WebComponentLive.astro';
+import SkillHalfLife from '../../components/demos/SkillHalfLife.astro';
+
+const demos = {
+  'document-app': DocumentApp,
+  'sprinkle-vs-widget': SprinkleVsWidget,
+  'mpa-vs-spa': MpaVsSpa,
+  'first-paint-race': FirstPaintRace,
+  'decision-tree': DecisionTree,
+  'stored-vs-derived': StoredVsDerived,
+  'sync-or-lift': SyncOrLift,
+  'state-homes': StateHomes,
+  'stale-cache': StaleCache,
+  'state-quiz': StateQuiz,
+  'fetch-states': FetchStates,
+  'typeahead-race': TypeaheadRace,
+  'wasted-work': WastedWork,
+  'optimistic-like': OptimisticLike,
+  'double-submit': DoubleSubmit,
+  'tiny-framework': TinyFramework,
+  'logic-port': LogicPort,
+  'impossible-states': ImpossibleStates,
+  'web-component-live': WebComponentLive,
+  'skill-half-life': SkillHalfLife,
+};
+
+export function getStaticPaths() {
+  return Object.keys({
+    'document-app': 0,
+    'sprinkle-vs-widget': 0,
+    'mpa-vs-spa': 0,
+    'first-paint-race': 0,
+    'decision-tree': 0,
+    'stored-vs-derived': 0,
+    'sync-or-lift': 0,
+    'state-homes': 0,
+    'stale-cache': 0,
+    'state-quiz': 0,
+    'fetch-states': 0,
+    'typeahead-race': 0,
+    'wasted-work': 0,
+    'optimistic-like': 0,
+    'double-submit': 0,
+    'tiny-framework': 0,
+    'logic-port': 0,
+    'impossible-states': 0,
+    'web-component-live': 0,
+    'skill-half-life': 0,
+  }).map((demo) => ({ params: { demo } }));
+}
+
+const { demo } = Astro.params;
+const Demo = demos[demo as keyof typeof demos];
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{demo} · embed</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0.85rem 1rem;
+        background: var(--bg);
+      }
+      /* The demo frame already has its own border/radius; drop its outer
+         margin so it sits flush inside the iframe. */
+      .demo {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    {Demo ? <Demo /> : <p style="color:#c33">Unknown demo: {demo}</p>}
+  </body>
+</html>
