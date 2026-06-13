@@ -34,3 +34,21 @@ npm run preview  # serve dist/
 Connect the repo, framework preset **Astro**, build command `npm run build`,
 output directory `dist`. Update `site` in `astro.config.mjs` when the real
 domain exists.
+
+## Analytics (Cloudflare Web Analytics)
+
+Privacy-first, cookie-free, no consent banner — keeps the site's "no tracking"
+copy honest. The beacon lives in `src/components/Analytics.astro` and renders
+only when a token is present, so dev and untokened builds ship no analytics.
+
+To turn it on once deployed:
+
+1. Cloudflare dashboard → **Web Analytics** → add your site. It shows a snippet
+   containing a `token`.
+2. Copy that token into your Cloudflare **Pages** project →
+   Settings → **Environment variables** → `PUBLIC_CF_BEACON_TOKEN`.
+3. Redeploy. The beacon now loads and the Web Analytics dashboard fills with
+   pageviews, top pages, referrers, countries, and core web vitals.
+
+Pick **one** injection method: this in-repo beacon (the env var above) **or**
+Cloudflare's automatic Pages injection — enabling both double-counts views.

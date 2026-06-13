@@ -1,0 +1,25 @@
+---
+// Cloudflare Web Analytics beacon. Privacy-first: no cookies, no client-side
+// state, no consent banner required — which keeps the "no tracking" claims on
+// the search and about pages honest.
+//
+// Renders ONLY when PUBLIC_CF_BEACON_TOKEN is set (i.e. in the deployed build),
+// so local dev and untokened builds ship zero analytics. Set the token in your
+// Cloudflare Pages project's environment variables; see README.
+//
+// No Subresource Integrity hash on purpose: beacon.min.js is a rolling script
+// Cloudflare updates in place with no published stable hash, so a pinned
+// `integrity` attribute would break analytics on their next deploy. This
+// matches Cloudflare's official snippet, which omits SRI for the same reason.
+const token = import.meta.env.PUBLIC_CF_BEACON_TOKEN;
+---
+
+{
+  token && (
+    <script
+      defer
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon={JSON.stringify({ token })}
+    />
+  )
+}
