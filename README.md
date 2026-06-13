@@ -1,5 +1,11 @@
 # Front in the End
 
+> **⚠️ AI-authored content.** The lessons, interactive demos, and most of the
+> code in this repository were drafted by an AI assistant (Claude) and reviewed
+> by the repository owner. Treat the technical claims as a well-informed
+> starting point, not peer-reviewed authority — verify anything load-bearing
+> against primary sources before relying on it.
+
 Lessons in thinking like a frontend engineer — prose + interactive demos for
 mid-level devs. Fully static: Astro + MDX, vanilla-JS demo islands, Pagefind
 search, localStorage reading progress. No backend.
