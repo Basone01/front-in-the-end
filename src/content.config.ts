@@ -10,7 +10,6 @@ const lessons = defineCollection({
     order: z.number(),
     duration: z.string(),
     draft: z.boolean().default(false),
-    lang: z.enum(['en', 'th']).default('en'),
   }),
 });
 

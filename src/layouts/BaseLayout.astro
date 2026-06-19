@@ -4,32 +4,17 @@ import '@fontsource-variable/literata/wght-italic.css';
 import '@fontsource-variable/jetbrains-mono';
 import '../styles/global.css';
 import Analytics from '../components/Analytics.astro';
-import { STR, type Lang } from '../lib/i18n';
 
 interface Props {
   title: string;
   description: string;
-  lang?: Lang;
-  /** The same page in the other language; if set, the language switcher links here. */
-  altHref?: string;
 }
 
-const { title, description, lang = 'en', altHref } = Astro.props;
-const s = STR[lang];
-
-// Localized nav targets.
-const home = lang === 'en' ? '/' : '/th/';
-const aboutPath = lang === 'en' ? '/about/' : '/th/about/';
-const searchPath = lang === 'en' ? '/search/' : '/th/search/';
-
-// hreflang alternates for SEO, when a counterpart exists.
-const here = Astro.url.pathname;
-const enHref = lang === 'en' ? here : altHref;
-const thHref = lang === 'th' ? here : altHref;
+const { title, description } = Astro.props;
 ---
 
 <!doctype html>
-<html lang={lang}>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -37,9 +22,9 @@ const thHref = lang === 'th' ? here : altHref;
     <meta name="description" content={description} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="alternate" type="application/rss+xml" title="Front in the End" href="/rss.xml" />
-    {enHref && <link rel="alternate" hreflang="en" href={enHref} />}
-    {thHref && <link rel="alternate" hreflang="th" href={thHref} />}
     <script is:inline>
+      // Runs before paint to avoid a theme flash. System preference is the
+      // default; an explicit choice in localStorage wins.
       (() => {
         const saved = localStorage.getItem('fite:theme');
         const system = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -50,19 +35,14 @@ const thHref = lang === 'th' ? here : altHref;
   <body>
     <header class="site-header">
       <div class="wrap">
-        <a class="wordmark" href={home}>front <em>in the</em> end</a>
+        <a class="wordmark" href="/">front <em>in the</em> end</a>
         <nav class="site-nav">
-          <a href={`${home}#tracks`}>{s.navTracks}</a>
-          <a href={aboutPath}>{s.navAbout}</a>
-          <a href={searchPath}>{s.navSearch}</a>
-          <a href="/presentation/" target="_blank" rel="noopener">{s.navDeck} ↗</a>
-          {altHref && (
-            <a class="lang-switch" href={altHref} hreflang={lang === 'en' ? 'th' : 'en'}>
-              {s.toOtherLang}
-            </a>
-          )}
+          <a href="/#tracks">Tracks</a>
+          <a href="/about/">About</a>
+          <a href="/search/">Search</a>
+          <a href="/presentation/" target="_blank" rel="noopener">Deck ↗</a>
           <button class="theme-toggle" data-theme-toggle aria-label="Toggle color theme">
-            ◐ {s.navTheme}
+            ◐ theme
           </button>
         </nav>
       </div>
@@ -74,8 +54,8 @@ const thHref = lang === 'th' ? here : altHref;
 
     <footer class="site-footer">
       <div class="wrap">
-        <span>{s.footerBlurb}</span>
-        <a href={aboutPath}>{s.footerColophon}</a>
+        <span>Front in the End — lessons in thinking like a frontend engineer.</span>
+        <a href="/about/">Colophon</a>
         <a href="/rss.xml">RSS</a>
       </div>
     </footer>

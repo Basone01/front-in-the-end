@@ -1,31 +1,25 @@
 ---
 import type { CollectionEntry } from 'astro:content';
-import { keyFromId, lessonHref, readLabel, type Lang } from '../lib/i18n';
 
 interface Props {
   lessons: CollectionEntry<'lessons'>[];
-  lang?: Lang;
 }
 
-const { lang = 'en' } = Astro.props;
 const lessons = Astro.props.lessons.toSorted((a, b) => a.data.order - b.data.order);
 ---
 
 <ol class="lesson-list">
   {
-    lessons.map((lesson) => {
-      const key = keyFromId(lesson.id);
-      return (
-        <li data-lesson-id={key}>
-          <span class="num">{String(lesson.data.order).padStart(2, '0')}</span>
-          <a href={lessonHref(lang, key)}>{lesson.data.title}</a>
-          <span class="tick" aria-label="read">
-            ✓
-          </span>
-          <span class="dur">{readLabel(lesson.data.duration, lang)}</span>
-        </li>
-      );
-    })
+    lessons.map((lesson) => (
+      <li data-lesson-id={lesson.id}>
+        <span class="num">{String(lesson.data.order).padStart(2, '0')}</span>
+        <a href={`/lessons/${lesson.id}/`}>{lesson.data.title}</a>
+        <span class="tick" aria-label="read">
+          ✓
+        </span>
+        <span class="dur">{lesson.data.duration}</span>
+      </li>
+    ))
   }
 </ol>
 

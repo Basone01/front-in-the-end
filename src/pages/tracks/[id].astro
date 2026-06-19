@@ -1,7 +1,8 @@
 ---
+import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import TrackPage from '../../components/TrackPage.astro';
-import { tracks, trackTitle, trackTagline } from '../../data/tracks';
+import LessonList from '../../components/LessonList.astro';
+import { tracks } from '../../data/tracks';
 
 export async function getStaticPaths() {
   return tracks
@@ -10,13 +11,17 @@ export async function getStaticPaths() {
 }
 
 const { track } = Astro.props;
+const lessons = await getCollection(
+  'lessons',
+  ({ data }) => data.track === track.id && !data.draft
+);
 ---
 
-<BaseLayout
-  title={`${trackTitle(track, 'en')} · Front in the End`}
-  description={trackTagline(track, 'en')}
-  lang="en"
-  altHref={`/th/tracks/${track.id}/`}
->
-  <TrackPage trackId={track.id} lang="en" />
+<BaseLayout title={`${track.title} · Front in the End`} description={track.tagline}>
+  <header class="hero">
+    <p class="lesson-eyebrow"><a href="/#tracks">tracks</a> <span>· {lessons.length} lessons</span></p>
+    <h1>{track.title}</h1>
+    <p>{track.tagline}</p>
+  </header>
+  <LessonList lessons={lessons} />
 </BaseLayout>

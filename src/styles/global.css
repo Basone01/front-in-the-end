@@ -151,22 +151,6 @@ kbd {
   color: var(--accent);
 }
 
-.lang-switch {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  border: 1px solid var(--line);
-  border-radius: 99px;
-  padding: 0.15rem 0.6rem;
-  color: var(--ink-soft) !important;
-  text-decoration: none;
-}
-
-.lang-switch:hover {
-  color: var(--accent) !important;
-  border-color: var(--accent);
-}
-
 .theme-toggle {
   background: none;
   border: 1px solid var(--line);
