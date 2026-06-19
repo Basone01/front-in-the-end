@@ -1,93 +1,13 @@
 ---
-import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import LessonList from '../components/LessonList.astro';
-import { tracks } from '../data/tracks';
-
-const lessons = await getCollection('lessons', ({ data }) => !data.draft);
-
-// Ordered ids per live track, serialized for the "continue reading" island.
-const trackOrder = Object.fromEntries(
-  tracks
-    .filter((t) => t.status === 'live')
-    .map((t) => [
-      t.id,
-      lessons
-        .filter((l) => l.data.track === t.id)
-        .sort((a, b) => a.data.order - b.data.order)
-        .map((l) => ({ id: l.id, title: l.data.title })),
-    ])
-);
+import HomePage from '../components/HomePage.astro';
 ---
 
 <BaseLayout
   title="Front in the End — lessons in thinking like a frontend engineer"
   description="Practical lessons for mid-level frontend engineers: rendering strategies, state and source of truth, race conditions, and the mental models behind good client-side code."
+  lang="en"
+  altHref="/th/"
 >
-  <section class="hero">
-    <h1>Frameworks change.<br />The <em>reasons</em> don't.</h1>
-    <p>
-      Lessons for frontend engineers who can ship features but want the mental models — why
-      rendering strategies exist, where state should live, what the network does to your UI. Plain
-      HTML to heavily stateful apps, with working demos you can poke.
-    </p>
-  </section>
-
-  <continue-reading data-tracks={JSON.stringify(trackOrder)}>
-    <aside class="continue-box">
-      <span class="k">Continue where you left off</span>
-      <a data-continue-link href="/">…</a>
-    </aside>
-  </continue-reading>
-
-  <section id="tracks">
-    {
-      tracks.map((track) => (
-        <article class={`track-card ${track.status === 'soon' ? 'is-soon' : ''}`}>
-          <h2>
-            {track.status === 'live' ? (
-              <a href={`/tracks/${track.id}/`}>{track.title}</a>
-            ) : (
-              track.title
-            )}{' '}
-            <span class={`badge ${track.status === 'live' ? 'live' : ''}`}>
-              {track.status === 'live' ? 'live' : 'coming soon'}
-            </span>
-          </h2>
-          <p class="tagline">{track.tagline}</p>
-          {track.status === 'live' && (
-            <LessonList lessons={lessons.filter((l) => l.data.track === track.id)} />
-          )}
-        </article>
-      ))
-    }
-  </section>
+  <HomePage lang="en" />
 </BaseLayout>
-
-<script>
-  import { getRead } from '../lib/progress';
-
-  // Shows the first unread lesson of any track the reader has started.
-  class ContinueReading extends HTMLElement {
-    connectedCallback() {
-      const trackOrder: Record<string, { id: string; title: string }[]> = JSON.parse(
-        this.dataset.tracks ?? '{}'
-      );
-      const read = new Set(getRead());
-      for (const lessons of Object.values(trackOrder)) {
-        const started = lessons.some((l) => read.has(l.id));
-        const next = lessons.find((l) => !read.has(l.id));
-        if (started && next) {
-          const link = this.querySelector<HTMLAnchorElement>('[data-continue-link]');
-          if (!link) return;
-          link.href = `/lessons/${next.id}/`;
-          link.textContent = next.title;
-          this.querySelector('.continue-box')?.classList.add('is-visible');
-          return;
-        }
-      }
-    }
-  }
-
-  customElements.define('continue-reading', ContinueReading);
-</script>

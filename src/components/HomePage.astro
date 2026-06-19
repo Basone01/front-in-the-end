@@ -1,0 +1,102 @@
+---
+import { getCollection } from 'astro:content';
+import LessonList from './LessonList.astro';
+import { tracks, trackTitle, trackTagline } from '../data/tracks';
+import { keyFromId, lessonHref, trackHref, STR, type Lang } from '../lib/i18n';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const s = STR[lang];
+
+const lessons = await getCollection(
+  'lessons',
+  ({ data }) => !data.draft && data.lang === lang
+);
+
+// Ordered keys per live track, for the "continue reading" island.
+const trackOrder = Object.fromEntries(
+  tracks
+    .filter((t) => t.status === 'live')
+    .map((t) => [
+      t.id,
+      lessons
+        .filter((l) => l.data.track === t.id)
+        .sort((a, b) => a.data.order - b.data.order)
+        .map((l) => ({ key: keyFromId(l.id), title: l.data.title })),
+    ])
+);
+
+const continueBase = lang === 'en' ? '/lessons/' : '/th/lessons/';
+---
+
+<section class="hero">
+  <h1 set:html={s.heroTitle} />
+  <p>{s.heroBody}</p>
+</section>
+
+<continue-reading data-tracks={JSON.stringify(trackOrder)} data-base={continueBase}>
+  <aside class="continue-box">
+    <span class="k">{s.continueLabel}</span>
+    <a data-continue-link href={lang === 'en' ? '/' : '/th/'}>…</a>
+  </aside>
+</continue-reading>
+
+<section id="tracks">
+  {
+    tracks.map((track) => (
+      <article class={`track-card ${track.status === 'soon' ? 'is-soon' : ''}`}>
+        <h2>
+          {track.status === 'live' ? (
+            <a href={trackHref(lang, track.id)}>{trackTitle(track, lang)}</a>
+          ) : (
+            trackTitle(track, lang)
+          )}{' '}
+          <span class={`badge ${track.status === 'live' ? 'live' : ''}`}>
+            {track.status === 'live' ? s.badgeLive : s.badgeSoon}
+          </span>
+        </h2>
+        <p class="tagline">{trackTagline(track, lang)}</p>
+        {track.status === 'live' &&
+          (lessons.some((l) => l.data.track === track.id) ? (
+            <LessonList lessons={lessons.filter((l) => l.data.track === track.id)} lang={lang} />
+          ) : (
+            <p class="tagline" style="opacity:.65;font-style:italic">
+              {lang === 'th' ? 'กำลังแปลเป็นไทย…' : 'translation in progress…'}
+            </p>
+          ))}
+      </article>
+    ))
+  }
+</section>
+
+<script>
+  import { getRead } from '../lib/progress';
+
+  class ContinueReading extends HTMLElement {
+    connectedCallback() {
+      const trackOrder: Record<string, { key: string; title: string }[]> = JSON.parse(
+        this.dataset.tracks ?? '{}'
+      );
+      const base = this.dataset.base ?? '/lessons/';
+      const read = new Set(getRead());
+      for (const lessons of Object.values(trackOrder)) {
+        const started = lessons.some((l) => read.has(l.key));
+        const next = lessons.find((l) => !read.has(l.key));
+        if (started && next) {
+          const link = this.querySelector<HTMLAnchorElement>('[data-continue-link]');
+          if (!link) return;
+          link.href = `${base}${next.key}/`;
+          link.textContent = next.title;
+          this.querySelector('.continue-box')?.classList.add('is-visible');
+          return;
+        }
+      }
+    }
+  }
+
+  if (!customElements.get('continue-reading'))
+    customElements.define('continue-reading', ContinueReading);
+</script>

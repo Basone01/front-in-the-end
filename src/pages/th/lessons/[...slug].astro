@@ -1,0 +1,29 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import LessonArticle from '../../../components/LessonArticle.astro';
+import { keyFromId } from '../../../lib/i18n';
+
+export async function getStaticPaths() {
+  const lessons = await getCollection(
+    'lessons',
+    ({ data }) => !data.draft && data.lang === 'th'
+  );
+  return lessons.map((entry) => ({
+    params: { slug: keyFromId(entry.id) },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const altHref = `/lessons/${keyFromId(entry.id)}/`;
+---
+
+<BaseLayout
+  title={`${entry.data.title} · Front in the End`}
+  description={entry.data.description}
+  lang="th"
+  altHref={altHref}
+>
+  <LessonArticle entry={entry} lang="th" />
+</BaseLayout>

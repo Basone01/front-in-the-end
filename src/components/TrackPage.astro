@@ -1,0 +1,30 @@
+---
+import { getCollection } from 'astro:content';
+import LessonList from './LessonList.astro';
+import { getTrack, trackTitle, trackTagline } from '../data/tracks';
+import { STR, type Lang } from '../lib/i18n';
+
+interface Props {
+  trackId: 'rendering' | 'state' | 'async' | 'thinking';
+  lang: Lang;
+}
+
+const { trackId, lang } = Astro.props;
+const track = getTrack(trackId);
+const s = STR[lang];
+const lessons = await getCollection(
+  'lessons',
+  ({ data }) => data.track === trackId && !data.draft && data.lang === lang
+);
+const home = lang === 'en' ? '/' : '/th/';
+---
+
+<header class="hero">
+  <p class="lesson-eyebrow">
+    <a href={`${home}#tracks`}>{s.navTracks.toLowerCase()}</a>
+    <span>· {s.lessonsCount(lessons.length)}</span>
+  </p>
+  <h1>{trackTitle(track, lang)}</h1>
+  <p>{trackTagline(track, lang)}</p>
+</header>
+<LessonList lessons={lessons} lang={lang} />

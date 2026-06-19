@@ -1,101 +1,29 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getTrack } from '../../data/tracks';
+import LessonArticle from '../../components/LessonArticle.astro';
+import { keyFromId } from '../../lib/i18n';
 
 export async function getStaticPaths() {
-  const lessons = await getCollection('lessons', ({ data }) => !data.draft);
-  return lessons.map((lesson) => ({
-    params: { slug: lesson.id },
-    props: { lesson },
-  }));
+  const all = await getCollection('lessons', ({ data }) => !data.draft);
+  const thKeys = new Set(all.filter((l) => l.data.lang === 'th').map((l) => keyFromId(l.id)));
+  return all
+    .filter((l) => l.data.lang === 'en')
+    .map((entry) => ({
+      params: { slug: entry.id },
+      props: { entry, hasTh: thKeys.has(keyFromId(entry.id)) },
+    }));
 }
 
-const { lesson } = Astro.props;
-const { Content } = await render(lesson);
-const track = getTrack(lesson.data.track);
-
-const siblings = (
-  await getCollection('lessons', ({ data }) => data.track === lesson.data.track && !data.draft)
-).sort((a, b) => a.data.order - b.data.order);
-const index = siblings.findIndex((l) => l.id === lesson.id);
-const prev = siblings[index - 1];
-const next = siblings[index + 1];
+const { entry, hasTh } = Astro.props;
+const altHref = hasTh ? `/th/lessons/${keyFromId(entry.id)}/` : undefined;
 ---
 
-<BaseLayout title={`${lesson.data.title} · Front in the End`} description={lesson.data.description}>
-  <article data-pagefind-body>
-    <header>
-      <p class="lesson-eyebrow">
-        <a href={`/tracks/${track.id}/`}>{track.title}</a>
-        <span>· lesson {lesson.data.order} of {siblings.length}</span>
-      </p>
-      <div class="lesson-number" aria-hidden="true">{String(lesson.data.order).padStart(2, '0')}</div>
-      <h1 class="lesson-title">{lesson.data.title}</h1>
-      <p class="lesson-desc">{lesson.data.description}</p>
-      <div class="lesson-meta">
-        <span>{lesson.data.duration} read</span>
-        <read-toggle data-id={lesson.id}>
-          <button class="read-toggle">mark as read</button>
-        </read-toggle>
-      </div>
-    </header>
-
-    <div class="prose">
-      <Content />
-    </div>
-
-    <nav class="lesson-pager">
-      {
-        prev ? (
-          <a href={`/lessons/${prev.id}/`}>
-            <span class="dir">← previous</span>
-            {prev.data.title}
-          </a>
-        ) : (
-          <a href={`/tracks/${track.id}/`}>
-            <span class="dir">← track</span>
-            {track.title}
-          </a>
-        )
-      }
-      {
-        next ? (
-          <a href={`/lessons/${next.id}/`} style="text-align: right">
-            <span class="dir">next →</span>
-            {next.data.title}
-          </a>
-        ) : (
-          <a href="/" style="text-align: right">
-            <span class="dir">end of track →</span>
-            Back to all tracks
-          </a>
-        )
-      }
-    </nav>
-  </article>
+<BaseLayout
+  title={`${entry.data.title} · Front in the End`}
+  description={entry.data.description}
+  lang="en"
+  altHref={altHref}
+>
+  <LessonArticle entry={entry} lang="en" />
 </BaseLayout>
-
-<script>
-  import { isRead, setRead } from '../../lib/progress';
-
-  class ReadToggle extends HTMLElement {
-    connectedCallback() {
-      const id = this.dataset.id;
-      const button = this.querySelector('button');
-      if (!id || !button) return;
-      const paint = () => {
-        const read = isRead(id);
-        button.dataset.read = String(read);
-        button.textContent = read ? '✓ read' : 'mark as read';
-      };
-      button.addEventListener('click', () => {
-        setRead(id, !isRead(id));
-        paint();
-      });
-      paint();
-    }
-  }
-
-  customElements.define('read-toggle', ReadToggle);
-</script>

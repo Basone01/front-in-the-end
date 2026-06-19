@@ -1,0 +1,119 @@
+---
+title: "JavaScript เข้ามา: enhance หรือ takeover"
+description: เส้นแบ่งไม่ได้อยู่ที่ว่าคุณเขียน JavaScript เยอะแค่ไหน — แต่อยู่ที่ว่าใครเป็นเจ้าของ DOM ข้ามจาก enhance ไปเป็น takeover อย่างตั้งใจ เพราะข้ามกลับมาไม่ง่าย
+track: rendering
+order: 2
+duration: 12 min
+lang: th
+---
+
+import SprinkleVsWidget from '../../../../components/demos/SprinkleVsWidget.astro';
+
+บทที่แล้วจบที่กำแพงของ document: หน่วยเดียวของการ update คือทั้งหน้า JavaScript คือวิธีที่เราเจาะกำแพงนั้น และอุตสาหกรรมก็เถียงกันมายี่สิบห้าปีว่ารูที่เจาะควรใหญ่แค่ไหน
+
+ปกติคำถามถูกตั้งในรูปของปริมาณ — "JavaScript เท่าไรถึงจะมากเกินไป?" — และการตั้งกรอบแบบปริมาณนำไปสู่การตัดสินใจที่แย่ เพราะไม่มีใครบอกได้ว่าเลขที่ถูกต้องคือเท่าไร นี่คือกรอบที่ทำนายพฤติกรรมโค้ดเบสของคุณได้จริง:
+
+**ใครเป็นเจ้าของ DOM — document หรือ JavaScript ของคุณ?**
+
+คำตอบมีแค่สองทาง และมันสร้างโลกคนละใบ
+
+## โลกที่หนึ่ง: document เป็นเจ้าของ JavaScript แค่มา enhance
+
+ในโลกนี้ HTML คือ interface ที่สมบูรณ์และใช้งานได้ หน้าที่ของ JavaScript คือ *ยกระดับ* มันตรงที่: ดักการ submit form แล้วจัดการโดยไม่รีโหลด, validate ตอนผู้ใช้พิมพ์, สลับ fragment แทนทั้งหน้า ถ้า JavaScript ไม่มาเลย — เน็ตช้า, browser extension, bug ใน bundle, CDN มีวันแย่ ๆ — feature ก็ลดระดับลงมาเป็นรูปแบบ HTML ของมันและ**ยังทำงานได้**
+
+นี่คือ *progressive enhancement* คำที่มีชื่อเสียงไม่ดีนักว่าเป็นอะไรที่คนพูดในงานสัมมนาแต่ไม่ทำตอนทำงานจริง ลอกความศักดิ์สิทธิ์ออกแล้วมันก็เป็นแค่คุณสมบัติทางวิศวกรรมข้อหนึ่ง: **ความถูกต้องของ feature ไม่ขึ้นกับชั้นที่มา enhance**
+
+```html
+<!-- feature ที่สมบูรณ์: -->
+<form method="post" action="/subscribe">
+  <label for="email">รับ newsletter</label>
+  <input id="email" type="email" name="email" required />
+  <button>สมัคร</button>
+</form>
+
+<script type="module">
+  // ส่วนยกระดับ: feature เดิม แต่ไม่รีโหลด
+  const form = document.querySelector('form');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await fetch('/subscribe', { method: 'POST', body: new FormData(form) });
+    form.replaceChildren(Object.assign(document.createElement('p'), {
+      textContent: '✓ สมัครแล้ว',
+    }));
+  });
+</script>
+```
+
+ยี่สิบบรรทัด สังเกตรูปร่างของมัน: script *ดัก* พฤติกรรมที่ทำงานอยู่แล้วแล้วเอาของที่ดีกว่ามาแทน ลบ script ทิ้ง คุณเสียความเนียน ไม่ได้เสีย function
+
+## โลกที่สอง: JavaScript เป็นเจ้าของ document เป็นแค่ฐานปล่อยจรวด
+
+ในโลกนี้ server ส่งเปลือกเปล่า ๆ มา — `<div id="root"></div>` กับ script tag — แล้ว JavaScript ก็ประกอบ interface ทั้งหมดขึ้นมา feature newsletter เดิม:
+
+```jsx
+function Subscribe() {
+  const [email, setEmail] = useState('');
+  const [done, setDone] = useState(false);
+
+  if (done) return <p>✓ สมัครแล้ว</p>;
+  return (
+    <form onSubmit={async (e) => {
+      e.preventDefault();
+      await fetch('/subscribe', { method: 'POST', body: new FormData(e.target) });
+      setDone(true);
+    }}>
+      <label htmlFor="email">รับ newsletter</label>
+      <input id="email" type="email" name="email" required
+             value={email} onChange={(e) => setEmail(e.target.value)} />
+      <button>สมัคร</button>
+    </form>
+  );
+}
+```
+
+เหมือนกันเป๊ะตอนทุกอย่างไปได้สวย แต่ architecture ตรงข้ามกัน: ถ้า script นี้ไม่มาและไม่ทำงาน ก็จะไม่มี form ไม่มี *อะไร* เลย
+
+ลองสัมผัสความต่างแทนที่จะเชื่อผม — สวิตช์จำลองสถานการณ์ที่ JavaScript โหลดไม่สำเร็จ:
+
+<SprinkleVsWidget />
+
+## "แต่ JavaScript มันโหลดได้เสมอแหละ"
+
+นี่คือข้อโต้แย้งมาตรฐาน เอามาคิดกันจริงจัง ไม่ มันไม่ได้โหลดได้เสมอ — เน็ตมือถือที่ไม่เสถียร, proxy ขององค์กร, ad blocker ที่ดุดัน, dependency npm สักตัวที่ทำ bundle คุณพังหนึ่งในสอง­ร้อย session แล้วไม่เคยโผล่ตอนคุณเทสต์เอง แต่พูดตรง ๆ? **ส่วนใหญ่มันก็โหลดได้** ถ้าความล้มเหลวเต็มขั้นเป็นต้นทุนเดียว โลกแบบ takeover ก็เป็นการเดิมพันที่สมเหตุสมผลสำหรับเกือบทุกอย่าง
+
+ข้อโต้แย้งจริงคือเรื่องว่าแต่ละโลกทำให้อะไร *ถูก* และอะไร *แพง*:
+
+- ในโลกแบบ enhancement ของถูกคือ **ความทนทานและการเข้าถึง** — HTML ที่ทำงานได้สำหรับผู้ใช้ทุกคน, crawler, และ bot preview — ส่วนของแพงคือ **ความเป็น stateful ที่เข้มข้น** การต่อสาย sprinkle หลาย ๆ อันที่โต้ตอบกันด้วยมือมันทรมานจริง ๆ ไม่มีใครอยากประสานงาน event listener สิบสี่ตัวโดยมี DOM เป็นmemoryร่วมอันเดียว
+- ในโลกแบบ takeover ของถูกคือ **ความเป็น stateful ที่เข้มข้น** — มี component model, state ร่วม, ทุก interaction ห่างแค่ function call เดียว — ส่วนของแพงคือทุกอย่างที่ document เคยทำให้ฟรี: first paint, SEO, ปุ่ม back, การจัดการ focus, "เปิดลิงก์ในแท็บใหม่" แต่ละอย่างกลายเป็นงาน *ของคุณ* ที่ค่า default มันทำได้ห่วย ๆ (บิลเต็มจะแจกแจงในบทถัดไป)
+
+ไม่มีโลกไหนผิด มันแค่ตั้งราคาต่างกัน และความผิดพลาดคือซื้อ price list ผิดใบสำหรับโปรดักต์ของคุณ
+
+## การทดสอบเรื่องความเป็นเจ้าของ
+
+คำถามใช้งานจริงสำหรับ feature ใด ๆ: **state ของ feature นี้มีบ้านตามธรรมชาติใน document ไหม?**
+
+- state ของ "section นี้กางอยู่หรือเปล่า" อยู่อย่างมีความสุขใน element `<details>` — โลกแบบ enhancement
+- state ของ "ผู้ใช้พิมพ์อะไร" อยู่ใน input — validate ด้วย sprinkle — โลกแบบ enhancement
+- state ของ "เลเยอร์เจ็ดสิบสองชั้นของไฟล์ดีไซน์นี้ สามชั้นกำลังถูกลากอยู่" ไม่มีตัวแทนใน document เลย DOM เป็น source of truth ไม่ได้เพราะความจริงมันไม่ได้รูปร่างเป็น document **นั่นคือการข้ามพรมแดนเข้าสู่โลกแบบ takeover ที่ชอบธรรม**
+
+การทดสอบนี้ใช้ทั่วไปได้: เมื่อ JavaScript ถือ state ที่ DOM แทนไม่ได้ — เมื่อ DOM กลายเป็น *ภาพฉาย* ของข้อมูลคุณแทนที่จะเป็นตัวข้อมูลเอง — คุณก็ข้ามมาแล้ว บางทีคุณก็จำเป็นต้องข้าม editor, แผนที่, เกม, spreadsheet: ความจริงของมันคือ model ในmemory และการแกล้งทำเป็นไม่ใช่ก็ได้โค้ดที่แย่ลง ไม่ใช่บริสุทธิ์ขึ้น
+
+โหมดพังคือการข้าม *โดยบังเอิญ* ไม่มีใครตัดสินใจว่า "accordion FAQ ของเว็บการตลาดเราควรพึ่ง JavaScript 200 KB ที่ทำงานถูกต้อง" พวกเขาตัดสินใจว่า "เราใช้ React กับทุกอย่าง" แล้ว accordion ก็รับ architecture นั้นมาพร้อมโหมดพังและบิลของมัน โลกแบบ widget เป็นที่อยู่ที่ดี แต่เป็นค่า default ที่แย่
+
+<div class="aside">
+
+**ทางสายกลางสมัยใหม่** ทวิภาคนี้เคยบังคับให้ต้องตอบทั้งเว็บ Islands architecture (Astro, Eleventy + WebC), HTMX และ React Server Components ล้วนพยายามตั้งเส้นแบ่ง *ต่อ component* แทน: หน้าที่ document เป็นเจ้าของส่วนใหญ่ โดยมีโซน JavaScript ที่ประกาศไว้ชัด เราจะกลับมาที่เรื่องนี้ในบทสี่ — มันคือจุดที่ลูกตุ้มของการ render กำลังตกลงตัวจริง ๆ
+
+</div>
+
+## เอาไปใช้วันจันทร์ยังไง
+
+คุณอาจเลือก architecture ไม่ได้ — มันถูกเลือกไปหลายปีแล้ว และน่าจะออกไปทางแบบ takeover เลนส์เรื่องความเป็นเจ้าของก็ยังคุ้มค่าเช่า:
+
+1. **ในแอป React ก็เลือกใช้ state ที่ document เป็นเจ้าของตรงที่มันมี** — `<details>` สำหรับเปิด/ปิด, `<form>` จริง ๆ ที่มี `action` (React 19 ทำให้กลับมาเป็นสำนวนปกติ), URL สำหรับ "เปิดแท็บไหนอยู่" — `?tab=billing` รอดการ refresh และ share ได้ ส่วน `useState` ไม่รอดทั้งคู่
+2. **ปล่อยให้ browser ทำงานของมัน** — attribute validate ของ native *บวก* ข้อความ custom ของคุณ, `<a href>` จริง ๆ สำหรับ navigation แม้ router จะดักไว้ก็ตาม — กดกลางเมาส์ต้องยังเปิดได้
+3. **เวลาเพิ่ม feature ถามคำถามเรื่องความเป็นเจ้าของก่อนคำถามเรื่องการ implement** — "state นี้อยู่ที่ไหนตามธรรมชาติ?" เป็นคำถามแรกที่ดีกว่า "ต้องใช้ hook ตัวไหน?"
+
+---
+
+**สรุป:** enhancement กับ takeover ไม่ใช่จุดบนหน้าปัดปริมาณ JavaScript แต่เป็น model ความเป็นเจ้าของสองแบบที่มี price list ตรงข้ามกัน document ควรเป็นเจ้าของทุกอย่างที่มัน *แทนได้* ส่วน JavaScript ควรเป็นเจ้าของสิ่งที่มัน *แทนไม่ได้* — และการข้ามควรเป็นการตัดสินใจ ไม่ใช่ค่า default บทถัดไป: เกิดอะไรขึ้นเมื่อทั้งอุตสาหกรรมข้ามโดย default — single-page app, สิ่งที่มันให้เราจริง ๆ และบิลแบบแจกแจง
